@@ -107,3 +107,10 @@ out/
 
 # Project-specific
 configs/nvim/vim_runtime/vim_runtime
+
+# Vim/Neovim plugins - managed by plugin manager, not git
+configs/nvim/vim_runtime/my_plugins/
+configs/nvim/vim_runtime/spell/
+configs/nvim/vim_runtime/temp_dirs/
+configs/nvim/vim_runtime/tags*
+configs/nvim/vim_runtime/.netrwhist
