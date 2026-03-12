@@ -1,0 +1,109 @@
+# Dev Environment Setup - .gitignore
+
+# Sensitive files - NEVER commit these
+*.env
+*.env.local
+.env*
+!*-example.env
+!.env.example
+
+# Secrets and API keys
+secrets/
+*secret*
+*credential*
+*password*
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Machine-specific / local-only configs
+# These should be customized per-machine
+local/
+*.local
+*.local.*
+**/local/
+**/*local*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Cache directories
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+.cache-*
+
+# Neovim
+configs/nvim/vim_runtime/spell/
+configs/nvim/vim_runtime/temp_dirs/
+configs/nvim/vim_runtime/tags*
+configs/nvim/vim_runtime/.netrwhist
+configs/nvim/LazyVim/.git/
+
+# Hammerspoon
+configs/hammerspoon/.DS_Store
+
+# Tmux
+.tmux/plugins/
+configs/tmux/plugins/
+
+# Zsh history and cache
+zsh_history/
+zcompdump*
+
+# Large binaries
+*.dmg
+*.pkg
+*.app
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Backup files
+*.bak
+*.backup
+*.old
+*~
+config-backup/
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Git
+.git/
+
+# Node modules (if any)
+node_modules/
+
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+out/
+
+# Project-specific
+configs/nvim/vim_runtime/vim_runtime

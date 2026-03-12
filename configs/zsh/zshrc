@@ -1,0 +1,646 @@
+# == Added on 2026-01-29 19:42:10 ==
+export PATH="/Users/senaca/code/agent_tools:$PATH"
+export PATH="$PATH:/Users/senaca/code/agent_tools/browser-tools"
+
+# == Added on 2025-09-30 15:16:51 ==
+export PATH="/Users/senaca/.cargo/bin:$PATH"
+
+# Amazon Q pre block. Keep at the top of this file.
+[[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh"
+START_TIME=$(($(gdate +%s%N)/1000000))
+
+# == Added on 2025-02-08 21:09:06 ==
+# export PATH="/Users/senaca/.cargo/bin:$PATH"
+
+# Configured Shortcuts:
+# Ctrl-]: zoxide-fzf-path
+# Ctrl-T: fzf-file-widget
+# Ctrl-R: atuin-search (Atuin history search)
+# Alt-C: fzf-cd-widget
+# ,gg: fzf_git_files
+# ,cc: compute (Python inline calculation)
+# ,px: pc4 (Proxychains4)
+# ,mm: output2x (Output to clipboard)
+# ,p: copy2x (Copy to clipboard)
+# Ctrl-K: create_completion 
+# Option-W set keympa to vim
+# Option-E set keymap to emacs
+# **<Tab> Fzf-completion
+
+# Core ZSH Configuration
+HISTFILE=$HOME/zsh_history/history
+HISTSIZE=50000
+SAVEHIST=50000
+setopt INC_APPEND_HISTORY EXTENDED_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS
+setopt HIST_IGNORE_ALL_DUPS HIST_FIND_NO_DUPS HIST_IGNORE_SPACE HIST_SAVE_NO_DUPS
+setopt SHARE_HISTORY
+unsetopt HIST_VERIFY
+
+# Environment Variables
+export LANG="zh_CN.UTF-8"
+export LC_ALL="zh_CN.UTF-8"
+export EDITOR=nvim
+export VISUAL=nvim
+export PAGER=less
+export CRASH_REPORTER_DISABLE=1
+export RUNEWIDTH_EASTASIAN=0
+
+# Use emacs key bindings
+bindkey -e
+
+# Path Configuration
+path_dirs=(
+    "/opt/homebrew/bin"
+    "/Users/senaca/Library/Python/3.11/bin"
+    "$HOME/local"
+    "/opt/homebrew/sbin"
+    "$HOME/kit/ocr"
+    "$HOME/kit"
+    "$HOME/kit/ocr/tools"
+    "$HOME/.local/bin"
+    "$HOME/local/bin"
+    "$HOME/.cabal/bin"
+    "$HOME/go/bin"
+    "$HOME/.pyenv/bin"
+    "$HOME/.emacs.d/bin"
+)
+
+for dir in $path_dirs; do
+    if [[ -d "$dir" && :$PATH: != *:"$dir":* ]]; then
+        PATH="$dir:$PATH"
+    fi
+done
+
+# Android SDK Configuration
+export ANDROID_HOME=~/local/android-sdk
+export ANDROID_SDK_ROOT=~/local/android-sdk
+export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
+
+# Java Configuration
+export JAVA_HOME="$(brew --prefix)/opt/openjdk@17"
+export PATH="$JAVA_HOME/bin:$PATH"
+
+# Zinit Plugin Manager
+if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
+    print -P "%F{33} %F{220}Installing Zinit...%f"
+    command mkdir -p "$HOME/.local/share/zinit" && command chmod g-rwX "$HOME/.local/share/zinit"
+    command git clone https://github.com/zdharma-continuum/zinit "$HOME/.local/share/zinit/zinit.git" && \
+        print -P "%F{33} %F{34}Installation successful.%f%b" || \
+        print -P "%F{160} The clone has failed.%f%b"
+fi
+
+source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
+autoload -Uz _zinit
+(( ${+_comps} )) && _comps[zinit]=_zinit
+
+
+# Initialize the Zsh completion system
+autoload -U compinit
+compinit
+
+# Zinit Plugins
+zinit light zsh-users/zsh-completions
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|=*' 'l:|=* r:|=*'
+zstyle ':completion:*' menu select
+zinit light zdharma-continuum/fast-syntax-highlighting
+zinit light zsh-users/zsh-autosuggestions
+zinit light unixorn/tumult.plugin.zsh 
+zinit light supercrabtree/k
+zinit load zdharma-continuum/history-search-multi-word
+zinit ice wait lucid
+# zinit light olets/zsh-abbr
+zinit ice pick"async.zsh" src"pure.zsh"
+zinit light sindresorhus/pure
+
+# Zoxide
+eval "$(zoxide init zsh)"
+zz (){
+  __zoxide_zi "$@"
+}
+
+
+# FZF Configuration
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+export FZF_TMUX=1
+export FZF_DEFAULT_OPTS='--no-height --no-reverse'
+export FZF_CTRL_R_OPTS="--preview 'echo {}' --preview-window down:3:hidden:wrap --bind '?:toggle-preview'"
+export FZF_CTRL_T_OPTS="--preview '(highlight -O ansi -l {} 2> /dev/null || cat {} || tree -C {}) 2> /dev/null | head -200'"
+export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
+
+# Ripgrep Configuration
+export RIPGREP_CONFIG_PATH='~/.ripgreprc'
+
+# Homebrew Configuration
+export HOMEBREW_API_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api"
+export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
+export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
+export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/homebrew-core.git"
+export HOMEBREW_PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+
+# Python Configuration
+alias pip='python -m pip'
+alias pip11='python3.11 -m pip'
+alias pip10='python3.10 -m pip'
+eval "$(pyenv init -)"
+eval "$(pyenv virtualenv-init -)"
+
+# Node Version Manager - Lazy loading
+export NVM_DIR="$HOME/.nvm"
+# Create placeholder functions for nvm, node, npm, etc.
+function nvm() {
+  unset -f nvm node npm npx yarn
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  nvm "$@"
+}
+
+function node() {
+  unset -f nvm node npm npx yarn
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  node "$@"
+}
+
+function npm() {
+  unset -f nvm node npm npx yarn
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  npm "$@"
+}
+
+function npx() {
+  unset -f nvm node npm npx yarn
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  npx "$@"
+}
+
+function yarn() {
+  unset -f nvm node npm npx yarn
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
+  yarn "$@"
+}
+
+# Go Version Manager
+[[ -s "/Users/senaca/.gvm/scripts/gvm" ]] && source "/Users/senaca/.gvm/scripts/gvm"
+
+# Haskell Configuration
+[ -f "/Users/senaca/.ghcup/env" ] && source "/Users/senaca/.ghcup/env"
+
+# Aliyun Pan CLI Configuration
+export ALIYUNPAN_CONFIG_DIR=~/.config
+
+
+# ------------------BEGIN------------------------------
+#  ==> autoenv or direnv
+if which direnv > /dev/null 2>&1;
+then
+  eval "$(direnv hook zsh)"
+fi
+
+if which activate.sh > /dev/null 2>&1;
+then
+  source `which activate.sh`
+fi
+# ==================END================================
+
+
+# load the environment variables from the .env file which include the API keys
+if [ -f ~/.litellm.env ]; then
+    # Use set -a to automatically export all variables
+    set -a
+    # Source the env file directly - much faster than line-by-line processing
+    source <(grep -v '^#' ~/.litellm.env | sed '/^$/d')
+    set +a
+    echo "Successfully loaded AI Keys"
+fi
+
+
+# Custom Functions and Aliases
+source ~/custom_function.zsh
+source ~/custom_alias.zsh
+
+# Remove Duplicates from PATH
+remove_duplicates_from_path
+
+# Activate Virtual Environment
+source ~/.venv/bin/activate
+
+# # GitHub Copilot CLI
+# eval "$(gh copilot alias -- zsh)"
+
+# key bindings
+# ------------------BEGIN------------------------------
+# ------------------BEGIN------------------------------
+# Widget to edit command line in nvim
+function edit-command-line-nvim() {
+    # Edit the current command line buffer in nvim
+    zle edit-command-line
+}
+
+# Register our function as ZLE widget
+zle -N edit-command-line-nvim
+
+# Bind Option-E to our widget
+bindkey '^[e' edit-command-line-nvim
+
+# Set cursor to line (I-beam) shape
+printf '[6 q'
+
+# Function to set cursor to line shape
+function set-cursor-line() {
+    printf '[6 q'
+}
+
+# Set cursor to line shape after each command
+precmd_functions+=(set-cursor-line)
+
+# Set cursor to line shape when line editor starts
+function zle-line-init() {
+    set-cursor-line
+    zle reset-prompt
+}
+zle -N zle-line-init
+# ==================END================================
+
+zoxide-fzf-path() {
+local left right
+local -a fzf_options=()
+
+left=${LBUFFER}
+right=${RBUFFER}
+
+  # Configure fzf options
+  fzf_options+=(--ansi --tiebreak=index --height=30%)
+
+  # Run zoxide query and use fzf for fuzzy path matching
+  local selected_path
+  selected_path=$(zoxide query -l | fzf "${fzf_options[@]}" --header='Select a directory to navigate' --prompt='zoxide-fzf> ')
+
+  # Replace the query with the selected path and check if it's a valid directory
+  if [[ -n "$selected_path" ]] && [[ -d "$selected_path" ]]; then
+    # Escape special characters and resolve symbolic links and relative path components
+    selected_path=$(realpath -- "$selected_path")
+    selected_path=$(printf '%q' "$selected_path")
+    LBUFFER="$left$selected_path$right"
+  else
+    echo "Error: '$selected_path' is not a valid directory"
+    return 1
+  fi
+  # Move the cursor to the end of the selected path
+  zle end-of-line
+
+  # Refresh the zle line
+  zle redisplay
+}
+zle -N zoxide-fzf-path
+
+# Bind the custom zsh widget to the Ctrl + Space key combination
+bindkey '\C-]' zoxide-fzf-path
+
+# ------------------BEGIN------------------------------
+# Enable accepting autosuggestions
+bindkey '^O' forward-word
+# bindkey '^P' autosuggest-accept
+
+# # Enable substring history search with 'j' and 'k'
+# bindkey -M vicmd 'k' history-substring-search-up
+# bindkey -M vicmd 'j' history-substring-search-down
+
+# Replace '<Esc>h' with 'K' to view help
+bindkey -r '^[h'
+bindkey -M vicmd 'K' run-help
+
+# Enable '<Shirt><Tab>' reverse order completions
+bindkey '^[[Z' reverse-menu-complete
+
+# Use editor to edit command line with '<Ctrl>V'
+autoload -U edit-command-line
+zle -N edit-command-line
+bindkey -M vicmd '^V' edit-command-line
+# ==================END================================
+
+# ------------------BEGIN------------------------------
+#  ==>  current editor buffer tricks
+copy2x(){
+  # aware of the os
+  if [[ $(uname) == 'Darwin' ]]; then
+      echo "$BUFFER" | pbcopy
+  else
+      echo "$BUFFER" | xclip -selection clipboard
+  fi
+}
+zle -N copy2x
+bindkey ",p" copy2x
+
+
+output2x() {
+    if [[ $(uname) == 'Darwin' ]]; then
+      LBUFFER="${LBUFFER} | tee /dev/tty | pbcopy"
+    else
+      LBUFFER="${LBUFFER} | tee /dev/tty | xclip -selection clipboard"
+    fi
+  zle reset-prompt  
+}
+zle -N output2x
+bindkey ",mm" output2x
+
+pc4() {
+  LBUFFER="proxychains4 ${LBUFFER}"
+  zle reset-prompt  
+}
+zle -N pc4
+bindkey ",px" pc4
+
+
+fzf_git_files() {
+    local file
+    file=$(git ls-tree -r --name-only HEAD | fzf --height 50% --preview 'tree -C {}')
+    
+    if [[ -n "$file" ]]; then
+        LBUFFER+="$file"
+    fi
+}
+
+zle -N fzf_git_files
+bindkey ',gg' fzf_git_files
+
+# Prettify JSON from clipboard
+function prettify_json_from_clipboard() {
+  # Check if on macOS
+  if [[ "$(uname)" == "Darwin" ]]; then
+    # Get JSON from clipboard, extract JSON part, prettify with python, and print
+    pbpaste | awk 'match($0, /{.*}/) {print substr($0, RSTART, RLENGTH)}' | python -m json.tool
+  else
+    echo "This command is only available on macOS."
+    return 1
+  fi
+  # Optionally, you can also copy the prettified JSON back to clipboard:
+  # pbpaste | awk 'match($0, /{.*}/) {print substr($0, RSTART, RLENGTH)}' | python -m json.tool | pbcopy
+  # echo "Prettified JSON copied to clipboard."
+}
+zle -N prettify_json_from_clipboard
+bindkey ',j' prettify_json_from_clipboard
+
+# Inline Python calculation
+function compute() {
+    local cmd="$LBUFFER"  # Directly assign the buffer to avoid unnecessary echoing
+    LBUFFER="python -c \"print($cmd)\""  # Escape the inner quotes and embed $cmd
+    zle redisplay  # Redisplay the line with the new LBUFFER
+}
+zle -N compute
+bindkey ',cc' compute
+
+# Atuin Configuration
+export ATUIN_NOBIND="true"
+eval "$(atuin init zsh)"
+bindkey '^R' atuin-search
+
+# treat each non-alphanumeric character as word boundary in backward-kill-word
+WORDCHARS=''
+
+# backward-kill-path-component() {
+#     # Delete until the previous slash, dot, or hyphen
+#     if [[ $LBUFFER =~ .*[/.-][^/.-]*$ ]]; then
+#         LBUFFER=${LBUFFER%[/.-]*}
+#     else
+#         zle backward-kill-word
+#     fi
+# }
+
+# # Bind this function to Ctrl+w
+# zle -N backward-kill-path-component
+# bindkey '^w' backward-kill-path-component
+
+
+
+test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
+
+function mcs {
+  model_prompt="$*"
+  magic-cli suggest "$model_prompt"
+}
+
+function mcf {
+  model_prompt="$*"
+  magic-cli search "$model_prompt"
+}
+
+function mca {
+  model_prompt="$*"
+  magic-cli ask "$model_prompt"
+}
+
+alias tree='tree -C --sort=size'
+alias mipip_install='pip install -i https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/simple'
+
+
+bindkey '^F' forward-word
+
+alias or_balance='curl -X GET "https://openrouter.ai/api/v1/auth/key"  -H "Authorization: Bearer $OPENROUTER_API_KEY" | jq .data.limit_remaining'
+
+alias uni_balance='curl -X GET "https://api.unify.ai/v0/credits" -H "accept: application/json" -H "Authorization: Bearer $UNIFY_API_KEY" | jq .credits'
+
+alias omg_balance='curl --location --request POST "https://cfcus02.opapi.win/api/v1/user/admin/balance" --header "Authorization: Bearer $OMGPT_API_KEY" | jq -r ".data.balance | tonumber / 34016.45 * 1000 | round / 1000"'
+
+export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+
+# ------ Terminal Buddy Mify ------
+# setopt interactivecomments
+# source /Users/senaca/.shell_plugins/cmd_complete/zsh_cmd_complete_mify.zsh
+# bindkey '^K' get_cmd_from_mify_comment
+# # ....... Terminal Buddy ....... 
+
+# # ------ Terminal Buddy Litellm ------
+# setopt interactivecomments
+# source /Users/senaca/.shell_plugins/cmd_complete/zsh_cmd_complete.zsh
+# bindkey '^J' get_cmd_from_comment
+# # ....... Terminal Buddy ....... 
+
+# create a alias for 'aider'
+alias aider-uni="export OPENAI_BASE_URL=$UNIFY_API_BASE && export OPENAI_API_KEY=$UNIFY_API_KEY && aider --subtree-only  --editor-edit-format editor-diff --watch-files --model openai/mify-gateway/qwen3-coder-plus"
+alias aider-litellm="export OPENAI_BASE_URL=$LITELLM_PROXY_API_BASE && export OPENAI_API_KEY=$LITELLM_PROXY_API_KEY && aider --subtree-only --editor-edit-format editor-diff  --watch-files --model glm-4.6"
+
+# 将以下函数添加到您的 ~/.zshrc 或 ~/.bashrc 文件中
+connect_db() {
+  if [ -z "$LDB_HOST" ] || [ -z "$LDB_USER" ] || [ -z "$LDB_DB" ] || [ -z "$LDB_PASS" ]; then
+    echo "错误：请先设置所有数据库连接环境变量"
+    return 1
+  fi
+  
+  # 使用 -P 参数避免密码提示（假设 mycli 配置已允许密码直接传递）
+  mycli -h "$LDB_HOST" -u "$LDB_USER" -p "$LDB_PASS" "$LDB_DB"
+}
+
+export https_proxy=http://127.0.0.1:6152;export http_proxy=http://127.0.0.1:6152;export all_proxy=socks5://127.0.0.1:6153
+
+alias unsetproxy='unset https_proxy; unset http_proxy; unset all_proxy; unset ftp_proxy; unset no_proxy; unset ALL_PROXY; unset FTP_PROXY; unset NO_PROXY'
+
+# create a alias for git graph log
+alias git-graph='git log --all --decorate --oneline --graph'
+
+# Create Claude project memory files and symbolic links
+function claude-init() {
+    local target_dir="${1:-.}"
+
+    if [[ ! -d "$target_dir" ]]; then
+        echo "Error: Directory '$target_dir' does not exist"
+        return 1
+    fi
+
+    # Create empty CLAUDE.md
+    if [[ ! -f "$target_dir/CLAUDE.md" ]]; then
+        touch "$target_dir/CLAUDE.md"
+        echo "Created empty CLAUDE.md"
+    else
+        echo "CLAUDE.md already exists"
+    fi
+
+    # Create empty CLAUDE.local.md
+    if [[ ! -f "$target_dir/CLAUDE.local.md" ]]; then
+        touch "$target_dir/CLAUDE.local.md"
+        echo "Created empty CLAUDE.local.md"
+    else
+        echo "CLAUDE.local.md already exists"
+    fi
+
+    # Create symbolic link AGENTS.md -> CLAUDE.md
+    if [[ ! -L "$target_dir/AGENTS.md" ]]; then
+        ln -sf "CLAUDE.md" "$target_dir/AGENTS.md"
+        echo "Created symbolic link AGENTS.md -> CLAUDE.md"
+    else
+        echo "AGENTS.md symbolic link already exists"
+    fi
+
+    # Create symbolic link AGENTS.override.md -> CLAUDE.local.md
+    if [[ ! -L "$target_dir/AGENTS.override.md" ]]; then
+        ln -sf "CLAUDE.local.md" "$target_dir/AGENTS.override.md"
+        echo "Created symbolic link AGENTS.override.md -> CLAUDE.local.md"
+    else
+        echo "AGENTS.override.md symbolic link already exists"
+    fi
+
+    # Create local directory if it doesn't exist
+    if [[ ! -d "$target_dir/local" ]]; then
+        mkdir -p "$target_dir/local"
+        echo "Created directory local/"
+    else
+        echo "local/ directory already exists"
+    fi
+
+    # Create empty local/PROD.md
+    if [[ ! -f "$target_dir/local/PROD.md" ]]; then
+        touch "$target_dir/local/PROD.md"
+        echo "Created empty local/PROD.md"
+    else
+        echo "local/PROD.md already exists"
+    fi
+
+    # Create local/docs directory if it doesn't exist
+    if [[ ! -d "$target_dir/local/docs" ]]; then
+        mkdir -p "$target_dir/local/docs"
+        echo "Created directory local/docs/"
+    else
+        echo "local/docs/ directory already exists"
+    fi
+
+    echo "Claude project memory setup complete in: $(realpath "$target_dir")"
+}
+
+END_TIME=$(($(gdate +%s%N)/1000000))
+ELAPSED=$((END_TIME - START_TIME))
+echo "ZSH loaded in $ELAPSED ms"
+export PATH="/Users/senaca/.nvm/versions/node/v20.14.0/bin:$PATH"
+export PATH="/Users/senaca/.nvm/versions/node/v22.10.0/bin:$PATH"
+
+# Amazon Q post block. Keep at the bottom of this file.
+[[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh"
+
+
+zoxide-insert() {
+  emulate -L zsh
+  setopt localoptions pipefail no_aliases
+  local p
+  zle -I                                # 进入外部交互前清理显示
+  p=$(zoxide query -i --) || { zle redisplay; return }  # 取消则只重绘
+  # 如果需要自动在路径后加 /，取消下一行注释
+  # [[ "$p" == */ ]] || p="$p/"
+  LBUFFER+="${(q)p}"                    # 安全引用并插入到光标前
+  zle redisplay                         # 选择后强制重绘
+}
+zle -N zoxide-insert
+# Emacs 模式：
+bindkey '^o' zoxide-insert
+# 如果你用 vi 模式，改用：
+# bindkey -M viins '^o' zoxide-insert
+
+# so cherry-studio can use this token to fetch the latest personal updates without ratelimit error
+launchctl setenv GH_TOKEN "$GH_TOKEN"
+
+nvm use v24.13.0
+
+alias sim-media='xcrun simctl addmedia booted'
+alias sim-path='xcrun simctl get_app_container booted'
+
+# Added by Antigravity
+export PATH="/Users/senaca/.antigravity/antigravity/bin:$PATH"
+
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+export PATH="$JAVA_HOME/bin:/opt/homebrew/opt/libpq/bin:$PATH"
+
+# Added by AntiHook
+export PATH="/Users/senaca/.local/bin/Antihub:$PATH"
+
+# bun completions
+[ -s "/Users/senaca/.bun/_bun" ] && source "/Users/senaca/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+# ai shell
+source /Users/senaca/code/playground/ai-shell/zsh/ai-shell-simple.zsh
+
+# >>> swapfiles >>>
+# Swap two files (swap their paths/names): swapfiles a b
+swapfiles() {
+  emulate -L zsh
+
+  if (( $# != 2 )); then
+    print -u2 "usage: swapfiles <path1> <path2>"
+    return 2
+  fi
+
+  local a=$1
+  local b=$2
+
+  if [[ $a == $b ]]; then
+    print -u2 "swapfiles: paths are identical"
+    return 2
+  fi
+  if [[ ! -e $a ]]; then
+    print -u2 "swapfiles: not found: $a"
+    return 1
+  fi
+  if [[ ! -e $b ]]; then
+    print -u2 "swapfiles: not found: $b"
+    return 1
+  fi
+
+  local tmp="${a:h}/.swapfiles.$$.$RANDOM"
+  while [[ -e $tmp ]]; do
+    tmp="${a:h}/.swapfiles.$$.$RANDOM"
+  done
+
+  command mv -- "$a" "$tmp" || return
+  command mv -- "$b" "$a" || { command mv -- "$tmp" "$a"; return 1; }
+  command mv -- "$tmp" "$b" || return
+}
+
+alias swap=swapfiles
+# <<< swapfiles <<<
+export PATH="/opt/homebrew/opt/trash-cli/bin:$PATH"
+alias rm='trash'
+
+export PATH="$PATH:$HOME/kit"
+alias gtheme='~/kit/ghostty-theme-switch.sh'
+
+export PI_TIMING=1
+
+

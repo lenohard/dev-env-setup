@@ -1,0 +1,79 @@
+{
+    // "python.analysis.typeCheckingMode": "basic",
+    // "python.analysis.diagnosticMode": "workspace",
+    // "python.analysis.autoSearchPaths": true,
+    // "pyright.enable": true,
+    "list.normalMappings": {
+        "t": "action:tabe",
+    "v": "action:vsplit",
+        "s": "action:split",
+        "d": "expr:GetDeleteAction"
+    },
+    "list.insertMappings": {
+        "<C-t>": "action:tabe",
+        "<C-w>": "command:wincmd k"
+    },
+    "list.source.files.defaultOptions": ["--number-select"],
+    "languageserver": {
+        "haskell": {
+            "command": "hie-wrapper",
+            "args": ["--lsp"],
+            "rootPatterns": [
+                "*.cabal",
+                "stack.yaml",
+                "cabal.project",
+                "package.yaml"
+            ],
+            "filetypes": [
+                "hs",
+                "lhs",
+                "haskell"
+            ],
+            "initializationOptions": {
+                "languageServerHaskell": {
+                    "hlintOn": false,
+                    "maxNumberOfProblems": 10,
+                    "completionSnippetsOn": true
+                }
+            }
+        },
+        "go": {
+            "command": "gopls",
+            "args": ["serve"],
+            "filetypes": ["go"],
+            "rootPatterns": ["go.mod", ".git/"],
+            "initializationOptions": {
+                "usePlaceholders": true
+            }
+        },
+        "lua": {
+            "command": "lua-language-server",
+            "filetypes": ["lua"],
+            "settings": {
+                "Lua": {
+                    "runtime": {
+                        "version": "LuaJIT",
+                        "path": [
+                            "?.lua",
+                            "?/init.lua",
+                            "/usr/share/5.1/?.lua",
+                            "/usr/share/lua/5.1/?/init.lua"
+                        ]
+                    },
+                    "diagnostics": {
+                        "globals": ["vim"]
+                    },
+                    "workspace": {
+                        "library": [
+                            "/usr/share/lua/5.1",
+                            "/usr/local/share/lua/5.1"
+                        ]
+                    },
+                    "telemetry": {
+                        "enable": false
+                    }
+                }
+            }
+        }
+    }
+}
