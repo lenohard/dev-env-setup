@@ -67,7 +67,7 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "m", "com.swinsian.Swinsian
 -- preview
 bind_toggle_application_hotkey({ "option", "ctrl" }, "p", "com.apple.Preview")
 -- finder
-bind_toggle_application_hotkey({ "option", "ctrl" }, "f", "com.apple.finder")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "f", "com.binarynights.ForkLift")
 
 bind_toggle_application_hotkey({ "option", "ctrl" }, "j", "com.lobehub.lobehub-desktop")
 -- macvim
@@ -86,19 +86,19 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "e", "com.google.antigravit
 ------- bind hotkey to toggle applications end -------
 bind_toggle_application_hotkey({ "option", "ctrl" }, "c", "com.apple.ScreenContinuity")
 -- bind to 小米办公
-bind_toggle_application_hotkey({ "option", "ctrl" }, "x", "com.larksuite.feishu.ka.saxmsa667.mac")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "x", "com.tencent.WeWorkMac")
 -- bind Xcode
 bind_toggle_application_hotkey({ "option", "ctrl" }, "i", "com.apple.dt.Xcode")
 bind_toggle_application_hotkey({ "ctrl" }, "'", "com.mitchellh.ghostty")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "a", "com.nssurge.surge-mac")
 -- bind_toggle_application_hotkey({ "option", "ctrl" }, "g", "com.openai.chat")
-bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.kangfenmao.CherryStudio")
--- bind_toggle_application_hotkey({ "option", "ctrl" }, "k", "com.wefonk.deepchat")
+-- bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.kangfenmao.CherryStudio")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.wefonk.deepchat")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "k", "com.bilingify.readest")
 -- bind spacemacs
 bind_toggle_application_hotkey({ "option", "ctrl" }, "s", "org.gnu.Emacs")
 -- bind apifox
-bind_toggle_application_hotkey({ "option", "ctrl" }, "q", "cn.apifox.app")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "q", "com.postmanlabs.mac")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "y", "com.pranapps.ByteHackerNews")
 -- iterm2
 -- bind_toggle_application_hotkey({ "ctrl" }, "'", "com.googlecode.iterm2")
@@ -285,7 +285,7 @@ end tell
 		return
 	end
 	hs.pasteboard.setContents(path)
-	hs.alert.show("Path copied")
+	hs.alert.show("Path copied (Finder)")
 end)
 
 -- -- use ctrl+8 to connect bluetooth device with name "black crown"
@@ -363,6 +363,69 @@ end
 
 hs.hotkey.bind({ "ctrl", "cmd" }, "c", copyAndStripNewlines)
 hs.hotkey.bind({ "ctrl", "cmd" }, "b", copyAndStripBlankLines)
+
+-- function shellQuote(value)
+-- 	local text = tostring(value or "")
+-- 	text = text:gsub("'", "'\\''")
+-- 	return "'" .. text .. "'"
+-- end
+
+-- function runTextLlmAction(actionId)
+-- 	local script = [[
+-- 	set theText to do shell script "osascript /Users/senaca/local/GetSelectedText.scpt"
+-- 	if theText is not "" then
+-- 		return theText
+-- 	end if
+-- 	]]
+
+-- 	local success, selectedText = hs.osascript.applescript(script)
+-- 	if not success or not selectedText or selectedText == "" then
+-- 		hs.alert.show("No selection")
+-- 		return
+-- 	end
+
+-- 	-- Write input to temp file to avoid shell quoting issues
+-- 	local tmpFile = "/tmp/handy-pi-input.txt"
+-- 	local f = io.open(tmpFile, "w")
+-- 	f:write(selectedText)
+-- 	f:close()
+
+-- 	local command = "/Users/senaca/projects/handy-pi/run.sh "
+-- 		.. shellQuote(actionId)
+-- 		.. " "
+-- 		.. shellQuote(tmpFile)
+
+-- 		hs.alert.show("LLM running…")
+-- 		hs.timer.doAfter(0.05, function()
+-- 			local output, ok = hs.execute(command, false)
+-- 			local cleaned = output and tostring(output):gsub("%s+$", "") or ""
+-- 			if cleaned ~= "" then
+-- 				hs.pasteboard.setContents(cleaned)
+-- 				hs.alert.show("Result copied ✓")
+-- 			else
+-- 				hs.alert.show("Failed (no output)")
+-- 			end
+-- 		end)
+-- end
+
+-- function showTextLlmChooser()
+-- 	local chooser = hs.chooser.new(function(choice)
+-- 		if not choice then
+-- 			return
+-- 		end
+-- 		runTextLlmAction(choice.id)
+-- 	end)
+
+-- 	chooser:choices({
+-- 		{ text = "Translate → 中文", subText = "Translate selected text into Chinese", id = "translate-zh" },
+-- 		{ text = "Explain", subText = "Explain selected text in Chinese", id = "explain" },
+-- 		{ text = "Rephrase", subText = "Rewrite selected text more clearly", id = "rephrase" },
+-- 		{ text = "Format", subText = "Format selected text into markdown", id = "format" },
+-- 	})
+-- 	chooser:show()
+-- end
+
+-- hs.hotkey.bind({ "ctrl", "cmd" }, "l", showTextLlmChooser)
 
 --  using shift+ctrl+T to download twitter video
 hs.hotkey.bind({ "shift", "ctrl" }, "T", function()
@@ -625,7 +688,7 @@ function countSelectedText()
 	end)
 end
 
--- Bind alt+cmd+c to count selected text
+-- Bind alt+cmd+c to count selected text (stored so we can temporarily disable it)
 hs.hotkey.bind({ "alt", "cmd" }, "c", countSelectedText)
 
 function moveCursorToFocusedApp()
@@ -835,3 +898,7 @@ end
 
 -- Bind Ctrl+V to our custom handler
 hs.hotkey.bind({"ctrl", "cmd"}, "v", saveClipboardImageAndPasteInGhostty)
+
+-- Universal Control: 用键盘把指针推过屏幕边缘触发跨 Mac 切换
+-- ⌘⌥→ / ← / ↑ / ↓  向 东 / 西 / 北 / 南 推过边界
+require("universal_control").bind()
