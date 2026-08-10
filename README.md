@@ -4,7 +4,7 @@ Portable development environment configuration for Zsh, Neovim, Hammerspoon, Gho
 
 ## Overview
 
-This project contains all your shell/editor/terminal configurations in one portable directory. The `install.sh` script creates **symlinks** from standard config locations to the files in this project, making this the single source of truth.
+This project contains your shell/editor/terminal configurations in one portable directory. The `install.sh` script creates **symlinks** from standard config locations to the files in this project, making this the single source of truth. Agent context and skills are kept outside the repository in iCloud and are linked during installation.
 
 ## Directory Structure
 
@@ -54,13 +54,21 @@ dev-env-setup/
    scp -r ~/dev-env-setup new-machine:~/
    ```
 
-2. **Run the installer**:
+2. **Make sure the external agent files are available**:
+   ```text
+   ~/Library/Mobile Documents/com~apple~CloudDocs/agent/AGENTS.md
+   ~/Library/Mobile Documents/com~apple~CloudDocs/agent/skills/
+   ```
+
+   These files are not stored in this repository. To use a different location, set `ICLOUD_AGENT_DIR` before running the installer.
+
+3. **Run the installer**:
    ```bash
    cd ~/dev-env-setup
    ./install.sh
    ```
 
-3. **Install dependencies** (if not already present):
+4. **Install dependencies** (if not already present):
    ```bash
    # Homebrew
    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -105,6 +113,10 @@ The installer creates these symlinks:
 | `configs/ghostty/config` | `~/.config/ghostty/config` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` |
 | `configs/ripgreprc` | `~/.ripgreprc` |
+| `iCloud agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` |
+| `iCloud agent/skills/` | `~/.agents/skills` |
+
+The installer uses the actual iCloud filename `AGENTS.md`. If either external source is unavailable, it skips that symlink and prints a warning. Override the sources with `ICLOUD_AGENT_DIR`, `AGENT_CONTEXT_FILE`, or `SKILLS_DIR`.
 
 ## Post-Install Steps
 

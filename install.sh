@@ -19,7 +19,9 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIGS_DIR="$PROJECT_DIR/configs"
-SKILLS_DIR="${SKILLS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/agent/skills}"
+ICLOUD_AGENT_DIR="${ICLOUD_AGENT_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/agent}"
+AGENT_CONTEXT_FILE="${AGENT_CONTEXT_FILE:-$ICLOUD_AGENT_DIR/AGENTS.md}"
+SKILLS_DIR="${SKILLS_DIR:-$ICLOUD_AGENT_DIR/skills}"
 BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d_%H%M%S)"
 DRY_RUN=false
 FORCE=false
@@ -161,6 +163,11 @@ create_symlink() {
         echo "  [DRY RUN] Would create symlink"
         return
     fi
+
+    if [[ -L "$target" && "$(readlink "$target")" == "$source" ]]; then
+        log_success "Symlink already correct: $target -> $source"
+        return
+    fi
     
     # Backup existing
     if [[ -e "$target" || -L "$target" ]]; then
@@ -276,12 +283,22 @@ echo "--- Ripgrep Configuration ---"
 create_symlink "$CONFIGS_DIR/ripgreprc" "$HOME/.ripgreprc" "Ripgrep config"
 
 # ----------------------------------------
-# 7. Skills (Agent skills folder)
+# 7. Agent Context and Skills (external iCloud files)
 # ----------------------------------------
 echo ""
-echo "--- Skills Configuration ---"
+echo "--- Agent Context and Skills ---"
 
-create_symlink "$SKILLS_DIR" "$HOME/.agents/skills" "Agent skills directory"
+if [[ -f "$AGENT_CONTEXT_FILE" ]]; then
+    create_symlink "$AGENT_CONTEXT_FILE" "$HOME/.pi/agent/AGENTS.md" "Agent context file"
+else
+    log_warn "Agent context file not found; skipping: $AGENT_CONTEXT_FILE"
+fi
+
+if [[ -d "$SKILLS_DIR" ]]; then
+    create_symlink "$SKILLS_DIR" "$HOME/.agents/skills" "Agent skills directory"
+else
+    log_warn "Agent skills directory not found; skipping: $SKILLS_DIR"
+fi
 
 # ----------------------------------------
 # 8. Install Zinit (Zsh Plugin Manager)
