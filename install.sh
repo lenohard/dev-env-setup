@@ -19,7 +19,7 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIGS_DIR="$PROJECT_DIR/configs"
-SKILLS_DIR="${SKILLS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/dev-env-setup/skills}"
+SKILLS_DIR="${SKILLS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/agent/skills}"
 BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d_%H%M%S)"
 DRY_RUN=false
 FORCE=false
