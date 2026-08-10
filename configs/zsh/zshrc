@@ -93,7 +93,6 @@ source "$HOME/.local/share/zinit/zinit.git/zinit.zsh"
 autoload -Uz _zinit
 (( ${+_comps} )) && _comps[zinit]=_zinit
 
-
 # Initialize the Zsh completion system
 autoload -U compinit
 compinit
@@ -109,15 +108,50 @@ zinit light supercrabtree/k
 zinit load zdharma-continuum/history-search-multi-word
 zinit ice wait lucid
 # zinit light olets/zsh-abbr
-zinit ice pick"async.zsh" src"pure.zsh"
-zinit light sindresorhus/pure
+
+# Minimal fast prompt
+autoload -Uz colors && colors
+setopt PROMPT_SUBST
+
+_miniaaml_git_branch() {
+  command git symbolic-ref --quiet --short HEAD 2>/dev/null || command git rev-parse --short HEAD 2>/dev/null
+}
+
+_miniaaml_git_status() {
+  command git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return
+
+  local flags=""
+  command git diff --no-ext-diff --quiet --ignore-submodules --cached 2>/dev/null || flags+="+"
+  command git diff --no-ext-diff --quiet --ignore-submodules 2>/dev/null || flags+="*"
+  [[ -n "$(command git ls-files --others --exclude-standard 2>/dev/null)" ]] && flags+="?"
+
+  printf '%s' "$flags"
+}
+
+_miniaaml_prompt() {
+  local git_branch git_flags
+
+  git_branch=$(_miniaaml_git_branch)
+  git_flags=$(_miniaaml_git_status)
+
+  PROMPT='%(?..%F{red}✗ %?%f )%F{blue}%~%f'
+  if [[ -n "$git_branch" ]]; then
+    PROMPT+=" %F{magenta}git:${git_branch}%f"
+    if [[ -n "$git_flags" ]]; then
+      PROMPT+=" %F{yellow}[${git_flags}]%f"
+    fi
+  fi
+  PROMPT+=$'\n''%F{green}❯%f '
+  RPROMPT=''
+}
+
+precmd_functions+=(_miniaaml_prompt)
 
 # Zoxide
 eval "$(zoxide init zsh)"
 zz (){
   __zoxide_zi "$@"
 }
-
 
 # FZF Configuration
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
@@ -178,14 +212,16 @@ function yarn() {
 }
 
 # Go Version Manager
-[[ -s "/Users/senaca/.gvm/scripts/gvm" ]] && source "/Users/senaca/.gvm/scripts/gvm"
+# Disabled 2026-06: GVM's _bash_pseudo_hash (bash-only) spams "command not found: _encode/_decode"
+# in zsh on every cd/precmd hook. Go is managed by Homebrew (/opt/homebrew/bin/go), GVM unused.
+# To re-enable, uncomment the line below.
+# [[ -s "/Users/senaca/.gvm/scripts/gvm" ]] && source "/Users/senaca/.gvm/scripts/gvm"
 
 # Haskell Configuration
 [ -f "/Users/senaca/.ghcup/env" ] && source "/Users/senaca/.ghcup/env"
 
 # Aliyun Pan CLI Configuration
 export ALIYUNPAN_CONFIG_DIR=~/.config
-
 
 # ------------------BEGIN------------------------------
 #  ==> autoenv or direnv
@@ -200,7 +236,6 @@ then
 fi
 # ==================END================================
 
-
 # load the environment variables from the .env file which include the API keys
 if [ -f ~/.litellm.env ]; then
     # Use set -a to automatically export all variables
@@ -210,7 +245,6 @@ if [ -f ~/.litellm.env ]; then
     set +a
     echo "Successfully loaded AI Keys"
 fi
-
 
 # Custom Functions and Aliases
 source ~/custom_function.zsh
@@ -241,11 +275,11 @@ zle -N edit-command-line-nvim
 bindkey '^[e' edit-command-line-nvim
 
 # Set cursor to line (I-beam) shape
-printf '[6 q'
+printf '\033[6 q'
 
 # Function to set cursor to line shape
 function set-cursor-line() {
-    printf '[6 q'
+    printf '\033[6 q'
 }
 
 # Set cursor to line shape after each command
@@ -329,7 +363,6 @@ copy2x(){
 zle -N copy2x
 bindkey ",p" copy2x
 
-
 output2x() {
     if [[ $(uname) == 'Darwin' ]]; then
       LBUFFER="${LBUFFER} | tee /dev/tty | pbcopy"
@@ -347,7 +380,6 @@ pc4() {
 }
 zle -N pc4
 bindkey ",px" pc4
-
 
 fzf_git_files() {
     local file
@@ -408,8 +440,6 @@ WORDCHARS=''
 # zle -N backward-kill-path-component
 # bindkey '^w' backward-kill-path-component
 
-
-
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
 
 function mcs {
@@ -429,7 +459,6 @@ function mca {
 
 alias tree='tree -C --sort=size'
 alias mipip_install='pip install -i https://pkgs.d.xiaomi.net/artifactory/api/pypi/pypi-virtual/simple'
-
 
 bindkey '^F' forward-word
 
@@ -552,7 +581,6 @@ export PATH="/Users/senaca/.nvm/versions/node/v22.10.0/bin:$PATH"
 # Amazon Q post block. Keep at the bottom of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh"
 
-
 zoxide-insert() {
   emulate -L zsh
   setopt localoptions pipefail no_aliases
@@ -595,7 +623,7 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # ai shell
-source /Users/senaca/code/playground/ai-shell/zsh/ai-shell-simple.zsh
+source /Users/senaca/projects/ai-shell/zsh/ai-shell-simple.zsh
 
 # >>> swapfiles >>>
 # Swap two files (swap their paths/names): swapfiles a b
@@ -641,6 +669,16 @@ alias rm='trash'
 export PATH="$PATH:$HOME/kit"
 alias gtheme='~/kit/ghostty-theme-switch.sh'
 
-export PI_TIMING=1
+# OpenClaw Completion
+source "/Users/senaca/.openclaw/completions/openclaw.zsh"
 
+# mimocode
+export PATH=/Users/senaca/.mimocode/bin:$PATH
 
+# >>> grok installer >>>
+export PATH="$HOME/.grok/bin:$PATH"
+fpath=(~/.grok/completions/zsh $fpath)
+autoload -Uz compinit && compinit -C
+# <<< grok installer <<<
+
+export PATH="$HOME/.local/bin:$PATH"

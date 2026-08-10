@@ -1,2 +1,9 @@
 
 # . "$HOME/.cargo/env"
+
+# Load pi-shell.env for all shells (non-interactive included)
+if [ -f ~/.pi-shell.env ]; then
+    set -a  # auto-export all variables
+    source ~/.pi-shell.env
+    set +a
+fi

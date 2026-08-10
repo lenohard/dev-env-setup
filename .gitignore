@@ -75,6 +75,7 @@ zcompdump*
 
 # Backup files
 *.bak
+*.bak.*
 *.backup
 *.old
 *~
@@ -106,6 +107,7 @@ dist/
 out/
 
 # Project-specific
+skills/
 configs/nvim/vim_runtime/vim_runtime
 
 # Vim/Neovim plugins - managed by plugin manager, not git

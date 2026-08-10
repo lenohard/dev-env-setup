@@ -19,6 +19,7 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIGS_DIR="$PROJECT_DIR/configs"
+SKILLS_DIR="${SKILLS_DIR:-$HOME/Library/Mobile Documents/com~apple~CloudDocs/dev-env-setup/skills}"
 BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d_%H%M%S)"
 DRY_RUN=false
 FORCE=false
@@ -275,7 +276,15 @@ echo "--- Ripgrep Configuration ---"
 create_symlink "$CONFIGS_DIR/ripgreprc" "$HOME/.ripgreprc" "Ripgrep config"
 
 # ----------------------------------------
-# 7. Install Zinit (Zsh Plugin Manager)
+# 7. Skills (Agent skills folder)
+# ----------------------------------------
+echo ""
+echo "--- Skills Configuration ---"
+
+create_symlink "$SKILLS_DIR" "$HOME/.agents/skills" "Agent skills directory"
+
+# ----------------------------------------
+# 8. Install Zinit (Zsh Plugin Manager)
 # ----------------------------------------
 echo ""
 echo "--- Zsh Plugin Manager (Zinit) ---"
@@ -294,7 +303,7 @@ else
 fi
 
 # ----------------------------------------
-# 8. Ensure required directories exist
+# 9. Ensure required directories exist
 # ----------------------------------------
 echo ""
 echo "--- Creating Required Directories ---"
@@ -317,7 +326,7 @@ for dir in "${REQUIRED_DIRS[@]}"; do
 done
 
 # ----------------------------------------
-# 9. Post-install instructions
+# 10. Post-install instructions
 # ----------------------------------------
 echo ""
 echo "=========================================="

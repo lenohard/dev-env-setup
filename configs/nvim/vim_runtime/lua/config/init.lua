@@ -1,3 +1,5 @@
+-- OSC 52 clipboard handled by nvim-osc52 plugin (see plugins.lua)
+
 -- lualine
 require("lualine").setup({
         options = {
@@ -160,13 +162,20 @@ setup_lsp("jdtls", {
 })
 
 -- Other servers
-local servers = { "ts_ls", "jsonls", "gopls", "sqls", "lua_ls" }
+local servers = { "ts_ls", "jsonls", "gopls", "sqls" }
 for _, lsp in ipairs(servers) do
      setup_lsp(lsp, {
          on_attach = on_attach,
          capabilities = capabilities,
      })
 end
+
+-- lua_ls needs full path since Homebrew bin may not be in Neovim's PATH
+setup_lsp("lua_ls", {
+    cmd = { "/opt/homebrew/bin/lua-language-server" },
+    on_attach = on_attach,
+    capabilities = capabilities,
+})
 
 -- Set up nvim-cmp.
 local cmp = require("cmp")

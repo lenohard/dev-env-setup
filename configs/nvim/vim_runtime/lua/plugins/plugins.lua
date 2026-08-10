@@ -70,49 +70,8 @@ return {
             require("diffview").setup()
         end,
     },
-    {
-        "nvim-treesitter/nvim-treesitter",
-        build = ":TSUpdate", -- Important: This runs the update command after installation
-        config = function()
-            local ts_install = require("nvim-treesitter.install")
-            ts_install.ts_generate_args = {
-                "generate",
-                "--abi",
-                tostring(vim.treesitter.language_version or 15),
-            }
-
-            require("nvim-treesitter.configs").setup({
-                -- A list of parser names, or "all" (the five listed parsers should always be installed)
-                ensure_installed = {
-                    "c",
-                    "lua",
-                    "vim",
-                    "vimdoc",
-                    "query",
-                    "python",
-                    "javascript",
-                    "typescript",
-                    "html",
-                    "css",
-                    "json",
-                    "swift",
-                },
-                -- Install parsers synchronously (only applied to `ensure_installed`)
-                sync_install = false,
-                -- Automatically install missing parsers when entering buffer
-                -- Recommendation: set to false if you don't have `tree-sitter` CLI installed locally
-                auto_install = true,
-                highlight = {
-                    enable = true,
-                    -- Setting this to true will run `:h syntax` and tree-sitter at the same time.
-                    -- Set this to `true` if you depend on 'syntax' being enabled (like for indentation).
-                    -- Using this option may slow down your editor, and you may see some duplicate highlights.
-                    -- Instead of true it can also be a list of languages
-                    additional_vim_regex_highlighting = false,
-                },
-            })
-        end,
-    },
+    -- nvim-treesitter removed: nvim 0.12+ has native treesitter support
+    -- Parsers are bundled or installed via :TSInstall (built-in)
     {
         "sindrets/diffview.nvim",
         event = "BufRead",
@@ -447,4 +406,23 @@ return {
                         --         require("image").setup()
                         --     end,
                         -- },
+    -- OSC 52 clipboard: copy from remote nvim to local clipboard over SSH+tmux
+    {
+        "ojroques/nvim-osc52",
+        config = function()
+            require("osc52").setup({ max_length = 0, silent = true, trim = false })
+            -- Auto-copy to local clipboard on any yank
+            vim.api.nvim_create_autocmd("TextYankPost", {
+                callback = function()
+                    if vim.v.event.operator == "y" and (
+                        vim.v.event.regname == "+" or
+                        vim.v.event.regname == "*" or
+                        vim.v.event.regname == ""
+                    ) then
+                        require("osc52").copy_register("+")
+                    end
+                end,
+            })
+        end,
+    },
                     }
