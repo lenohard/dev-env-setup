@@ -1,16 +1,16 @@
 # == Added on 2026-01-29 19:42:10 ==
-export PATH="/Users/senaca/code/agent_tools:$PATH"
-export PATH="$PATH:/Users/senaca/code/agent_tools/browser-tools"
+export PATH="$HOME/code/agent_tools:$PATH"
+export PATH="$PATH:$HOME/code/agent_tools/browser-tools"
 
 # == Added on 2025-09-30 15:16:51 ==
-export PATH="/Users/senaca/.cargo/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
 
 # Amazon Q pre block. Keep at the top of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh"
 START_TIME=$(($(gdate +%s%N)/1000000))
 
 # == Added on 2025-02-08 21:09:06 ==
-# export PATH="/Users/senaca/.cargo/bin:$PATH"
+# export PATH="$HOME/.cargo/bin:$PATH"
 
 # Configured Shortcuts:
 # Ctrl-]: zoxide-fzf-path
@@ -51,7 +51,7 @@ bindkey -e
 # Path Configuration
 path_dirs=(
     "/opt/homebrew/bin"
-    "/Users/senaca/Library/Python/3.11/bin"
+    "$HOME/Library/Python/3.11/bin"
     "$HOME/local"
     "/opt/homebrew/sbin"
     "$HOME/kit/ocr"
@@ -215,10 +215,10 @@ function yarn() {
 # Disabled 2026-06: GVM's _bash_pseudo_hash (bash-only) spams "command not found: _encode/_decode"
 # in zsh on every cd/precmd hook. Go is managed by Homebrew (/opt/homebrew/bin/go), GVM unused.
 # To re-enable, uncomment the line below.
-# [[ -s "/Users/senaca/.gvm/scripts/gvm" ]] && source "/Users/senaca/.gvm/scripts/gvm"
+# [[ -s "$HOME/.gvm/scripts/gvm" ]] && source "$HOME/.gvm/scripts/gvm"
 
 # Haskell Configuration
-[ -f "/Users/senaca/.ghcup/env" ] && source "/Users/senaca/.ghcup/env"
+[ -f "$HOME/.ghcup/env" ] && source "$HOME/.ghcup/env"
 
 # Aliyun Pan CLI Configuration
 export ALIYUNPAN_CONFIG_DIR=~/.config
@@ -472,13 +472,13 @@ export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
 
 # ------ Terminal Buddy Mify ------
 # setopt interactivecomments
-# source /Users/senaca/.shell_plugins/cmd_complete/zsh_cmd_complete_mify.zsh
+# source $HOME/.shell_plugins/cmd_complete/zsh_cmd_complete_mify.zsh
 # bindkey '^K' get_cmd_from_mify_comment
 # # ....... Terminal Buddy ....... 
 
 # # ------ Terminal Buddy Litellm ------
 # setopt interactivecomments
-# source /Users/senaca/.shell_plugins/cmd_complete/zsh_cmd_complete.zsh
+# source $HOME/.shell_plugins/cmd_complete/zsh_cmd_complete.zsh
 # bindkey '^J' get_cmd_from_comment
 # # ....... Terminal Buddy ....... 
 
@@ -497,7 +497,6 @@ connect_db() {
   mycli -h "$LDB_HOST" -u "$LDB_USER" -p "$LDB_PASS" "$LDB_DB"
 }
 
-export https_proxy=http://127.0.0.1:6152;export http_proxy=http://127.0.0.1:6152;export all_proxy=socks5://127.0.0.1:6153
 
 alias unsetproxy='unset https_proxy; unset http_proxy; unset all_proxy; unset ftp_proxy; unset no_proxy; unset ALL_PROXY; unset FTP_PROXY; unset NO_PROXY'
 
@@ -572,11 +571,8 @@ function claude-init() {
     echo "Claude project memory setup complete in: $(realpath "$target_dir")"
 }
 
-END_TIME=$(($(gdate +%s%N)/1000000))
-ELAPSED=$((END_TIME - START_TIME))
-echo "ZSH loaded in $ELAPSED ms"
-export PATH="/Users/senaca/.nvm/versions/node/v20.14.0/bin:$PATH"
-export PATH="/Users/senaca/.nvm/versions/node/v22.10.0/bin:$PATH"
+export PATH="$HOME/.nvm/versions/node/v20.14.0/bin:$PATH"
+export PATH="$HOME/.nvm/versions/node/v22.10.0/bin:$PATH"
 
 # Amazon Q post block. Keep at the bottom of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh"
@@ -607,23 +603,23 @@ alias sim-media='xcrun simctl addmedia booted'
 alias sim-path='xcrun simctl get_app_container booted'
 
 # Added by Antigravity
-export PATH="/Users/senaca/.antigravity/antigravity/bin:$PATH"
+export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21
 export PATH="$JAVA_HOME/bin:/opt/homebrew/opt/libpq/bin:$PATH"
 
 # Added by AntiHook
-export PATH="/Users/senaca/.local/bin/Antihub:$PATH"
+export PATH="$HOME/.local/bin/Antihub:$PATH"
 
 # bun completions
-[ -s "/Users/senaca/.bun/_bun" ] && source "/Users/senaca/.bun/_bun"
+[ -s "$HOME/.bun/_bun" ] && source "$HOME/.bun/_bun"
 
 # bun
 export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # ai shell
-source /Users/senaca/projects/ai-shell/zsh/ai-shell-simple.zsh
+source $HOME/projects/ai-shell/zsh/ai-shell-simple.zsh
 
 # >>> swapfiles >>>
 # Swap two files (swap their paths/names): swapfiles a b
@@ -670,10 +666,10 @@ export PATH="$PATH:$HOME/kit"
 alias gtheme='~/kit/ghostty-theme-switch.sh'
 
 # OpenClaw Completion
-source "/Users/senaca/.openclaw/completions/openclaw.zsh"
+source "$HOME/.openclaw/completions/openclaw.zsh"
 
 # mimocode
-export PATH=/Users/senaca/.mimocode/bin:$PATH
+export PATH=$HOME/.mimocode/bin:$PATH
 
 # >>> grok installer >>>
 export PATH="$HOME/.grok/bin:$PATH"
@@ -681,4 +677,29 @@ fpath=(~/.grok/completions/zsh $fpath)
 autoload -Uz compinit && compinit -C
 # <<< grok installer <<<
 
-export PATH="$HOME/.local/bin:$PATH"
+export https_proxy=http://127.0.0.1:7890;export http_proxy=http://127.0.0.1:7890;export all_proxy=socks5://127.0.0.1:7890
+
+echo "ZSH loaded in $ELAPSED ms"
+
+# Set local HTTP/HTTPS and SOCKS proxies. Usage: setproxy [port]
+setproxy() {
+  local port="${1:-7890}"
+  local http_proxy_url="http://127.0.0.1:${port}"
+  local socks_proxy_url="socks5h://127.0.0.1:${port}"
+
+  export http_proxy="$http_proxy_url"
+  export HTTP_PROXY="$http_proxy_url"
+  export https_proxy="$http_proxy_url"
+  export HTTPS_PROXY="$http_proxy_url"
+  export all_proxy="$socks_proxy_url"
+  export ALL_PROXY="$socks_proxy_url"
+  export socks_proxy="$socks_proxy_url"
+  export SOCKS_PROXY="$socks_proxy_url"
+  export no_proxy="localhost,127.0.0.1,::1"
+  export NO_PROXY="$no_proxy"
+
+  print "Proxy enabled on port ${port}"
+}
+
+END_TIME=$(($(gdate +%s%N)/1000000))
+ELAPSED=$((END_TIME - START_TIME))
