@@ -253,9 +253,6 @@ source ~/custom_alias.zsh
 # Remove Duplicates from PATH
 remove_duplicates_from_path
 
-# Activate Virtual Environment
-source ~/.venv/bin/activate
-
 # # GitHub Copilot CLI
 # eval "$(gh copilot alias -- zsh)"
 
@@ -665,19 +662,11 @@ alias rm='trash'
 export PATH="$PATH:$HOME/kit"
 alias gtheme='~/kit/ghostty-theme-switch.sh'
 
-# OpenClaw Completion
-source "$HOME/.openclaw/completions/openclaw.zsh"
-
-# mimocode
-export PATH=$HOME/.mimocode/bin:$PATH
-
 # >>> grok installer >>>
 export PATH="$HOME/.grok/bin:$PATH"
 fpath=(~/.grok/completions/zsh $fpath)
 autoload -Uz compinit && compinit -C
 # <<< grok installer <<<
-
-export https_proxy=http://127.0.0.1:7890;export http_proxy=http://127.0.0.1:7890;export all_proxy=socks5://127.0.0.1:7890
 
 echo "ZSH loaded in $ELAPSED ms"
 
@@ -701,5 +690,8 @@ setproxy() {
   print "Proxy enabled on port ${port}"
 }
 
+# Host-specific configuration (per-machine, not in dev-env-setup)
+source ~/.host_zshrc
 END_TIME=$(($(gdate +%s%N)/1000000))
 ELAPSED=$((END_TIME - START_TIME))
+
