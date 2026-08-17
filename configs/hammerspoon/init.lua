@@ -109,6 +109,7 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "a", "imagetasks.iStatistic
 -- Warp terminal
 bind_toggle_application_hotkey({ "option", "ctrl" }, "z", "dev.warp.Warp-Stable")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "v", "dev.commandline.waveterm")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "d", "com.lenohard.corner")
 
 -- Define a function to create the hotkey binding
 function createToggleShortcut(shortcutModifiers, shortcutKey, firstAppBundleId, secondAppBundleId)
