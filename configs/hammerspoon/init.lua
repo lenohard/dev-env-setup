@@ -60,10 +60,8 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "r", "company.thebrowser.Br
 -- activity monitor
 -- bind_toggle_application_hotkey({ "option", "ctrl" }, "n", "com.apple.ActivityMonitor")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "t", "telegram")
--- mac music app
 bind_toggle_application_hotkey({ "option", "ctrl" }, "m", "com.swinsian.Swinsian")
--- system setting
--- bind_toggle_application_hotkey({"option", "ctrl"},"s", "com.apple.systempreferences")
+bind_toggle_application_hotkey({"option", "ctrl"},"b", "dev.bb.desktop")
 -- preview
 bind_toggle_application_hotkey({ "option", "ctrl" }, "p", "com.apple.Preview")
 -- finder
@@ -88,7 +86,6 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "c", "com.apple.ScreenConti
 -- bind to 小米办公
 bind_toggle_application_hotkey({ "option", "ctrl" }, "x", "com.electron.lark")
 -- bind Xcode
-bind_toggle_application_hotkey({ "option", "ctrl" }, "i", "com.apple.dt.Xcode")
 bind_toggle_application_hotkey({ "ctrl" }, "'", "com.mitchellh.ghostty")
 bind_toggle_application_hotkey({"option", "ctrl"},"b", "dev.bb.desktop")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "g", "com.openai.codex")

@@ -43,6 +43,7 @@
   "pi.nvim": { "branch": "main", "commit": "cc2377f88c99871bc44b45490ef9d91a5d1c31e1" },
   "plenary.nvim": { "branch": "master", "commit": "b9fd5226c2f76c951fc8ed5923d85e4de065e509" },
   "rainbow_parentheses.vim": { "branch": "master", "commit": "27e7cd73fec9d1162169180399ff8ea9fa28b003" },
+  "render-markdown.nvim": { "branch": "main", "commit": "8e8795368391036643b622875a6da6a51bcd33f4" },
   "sqls.nvim": { "branch": "main", "commit": "dfc304f10fe364611ffdb3efc488ae260b0dca78" },
   "tabby.nvim": { "branch": "main", "commit": "3c130e1fcb598ce39a9c292847e32d7c3987cf11" },
   "targets.vim": { "branch": "master", "commit": "6325416da8f89992b005db3e4517aaef0242602e" },

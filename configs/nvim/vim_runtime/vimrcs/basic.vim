@@ -150,10 +150,8 @@ if has("gui_running")
     set guioptions-=T
     set guioptions-=e
     set t_Co=256
-    " 'guitablabel' is Vim-only: nvim rejects it with E519 even when has('gui_running')
-    " is true (Neovide). exists('&guitablabel') returns 1 there anyway, so gate on engine.
-    " In nvim the tab label comes from 'tabline'.
-    if !has("nvim")
+    " Neovim (incl. Neovide) has no 'guitablabel' support -> E519
+    if !has('nvim')
         set guitablabel=%M\ %t
     endif
 endif

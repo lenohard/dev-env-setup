@@ -257,3 +257,9 @@ endif
 
 " set conceallevel=0 for json file
 autocmd FileType json setlocal conceallevel=0
+
+" Neovide GUI
+if exists('g:neovide')
+    let g:neovide_fullscreen = v:true
+    let g:neovide_scale_factor = 0.8
+endif
