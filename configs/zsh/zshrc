@@ -7,9 +7,13 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # Amazon Q pre block. Keep at the top of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh"
-# portable millisecond clock: zsh EPOCHREALTIME (macOS + Linux), gdate as fallback
+# portable millisecond clock: zsh/datetime (macOS + Linux), gdate as fallback
+zmodload zsh/datetime 2>/dev/null
 if [[ -n ${EPOCHREALTIME:-} ]]; then
-  _now_ms() { print -r -- $(( ${EPOCHREALTIME/[.,]/} / 1000 )); }
+  _now_ms() {
+    local t=$EPOCHREALTIME f=${EPOCHREALTIME#*.}
+    print -r -- $(( ${t%%.*} * 1000 + ${(r:3::0:)f[1,3]} ))
+  }
 else
   _now_ms() { print -r -- $(( $(gdate +%s%N) / 1000000 )); }
 fi
