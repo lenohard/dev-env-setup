@@ -168,4 +168,15 @@ function M.new_session()
   end
 end
 
+--- Toggle the floating info popup (status / session / model / context / cost).
+function M.toggle_info()
+  if not M.is_open() then
+    M.open()
+    return
+  end
+  if active then
+    active:toggle_info()
+  end
+end
+
 return M

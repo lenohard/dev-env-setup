@@ -13,17 +13,38 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("pi_chat")
 
--- Persistent winbar hint (always visible so the user never has to remember keys).
-local CONV_WINBAR = "pi ❯ conversation"
-
 -- Highlight groups for role separators. Linked to common groups so they adapt
 -- to the active colorscheme (bar = accent/function, rule = comment/dim).
 local function ensure_highlights()
-  if vim.fn.hlexists("PiChatRole") == 1 then
-    return
-  end
+  -- Re-derive on every call so the input tint tracks colorscheme changes.
   vim.api.nvim_set_hl(0, "PiChatRole", { link = "Title", default = true })
   vim.api.nvim_set_hl(0, "PiChatRule", { link = "Comment", default = true })
+
+  -- Input pane background: a subtle shift from Normal's bg so the two panes
+  -- are easy to tell apart under any colorscheme. Falls back gracefully when
+  -- Normal has no bg (e.g. transparent terminals) by using a CursorLine link.
+  local normal = vim.api.nvim_get_hl(0, { name = "Normal" })
+  local bg = normal and normal.bg
+  if bg then
+    -- Nudge each channel toward a contrasting tone (lighten dark themes,
+    -- darken light themes) by ~8%.
+    local r = math.floor(bg / 65536) % 256
+    local g = math.floor(bg / 256) % 256
+    local b = bg % 256
+    local lum = (r + g + b) / 3
+    local delta = lum < 128 and 16 or -16
+    local function clamp(v)
+      return math.max(0, math.min(255, v + delta))
+    end
+    local tinted = clamp(r) * 65536 + clamp(g) * 256 + clamp(b)
+    vim.api.nvim_set_hl(0, "PiChatInputBg", { bg = tinted })
+  else
+    vim.api.nvim_set_hl(0, "PiChatInputBg", { link = "CursorLine", default = true })
+  end
+
+  -- Info popup: reuse the float groups so it matches the theme.
+  vim.api.nvim_set_hl(0, "PiChatInfo", { link = "NormalFloat", default = true })
+  vim.api.nvim_set_hl(0, "PiChatInfoBorder", { link = "FloatBorder", default = true })
 end
 
 --- @class PiChatUI
@@ -63,6 +84,8 @@ function M.open(opts)
     on_quit = opts.on_quit,
     on_pick_model = opts.on_pick_model,
     on_pick_session = opts.on_pick_session,
+    on_new_session = opts.on_new_session,
+    on_toggle_info = opts.on_toggle_info,
     on_paste_image = opts.on_paste_image,
     on_open_image = opts.on_open_image,
   }, UI)
@@ -115,55 +138,25 @@ function M.open(opts)
   vim.wo[self.input_win].number = false
   vim.wo[self.input_win].relativenumber = false
   vim.wo[self.input_win].winfixheight = true
+  -- Distinct background so the input pane is easy to tell apart from the
+  -- conversation. winhighlight remaps Normal only in this window.
+  vim.wo[self.input_win].winhighlight = "Normal:PiChatInputBg,EndOfBuffer:PiChatInputBg"
   vim.api.nvim_win_set_height(self.input_win, 2)
   self:_setup_input_autogrow()
 
   self:_set_keymaps()
-  self:_setup_statusline()
+  -- Re-derive the input tint / popup colors when the colorscheme changes.
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    callback = function()
+      if self.conv_buf and vim.api.nvim_buf_is_valid(self.conv_buf) then
+        ensure_highlights()
+      else
+        return true -- buffer gone: remove this autocmd
+      end
+    end,
+  })
   self:focus_input()
   return self
-end
-
--- Per-window statusline for pi-chat buffers only. Reads a buffer-local stats
--- table (set via UI:set_stats) so the global lualine is untouched elsewhere.
-function _G.PiChatStatusline()
-  local b = vim.b.pichat_stats
-  if not b then
-    return "  pi-chat"
-  end
-  local parts = { "  pi-chat" }
-  if b.percent ~= nil then
-    parts[#parts + 1] = string.format("ctx %.0f%%%%", b.percent)
-  elseif b.tokens and b.context_window then
-    parts[#parts + 1] = string.format("ctx %d/%d", b.tokens, b.context_window)
-  end
-  if b.cost ~= nil then
-    parts[#parts + 1] = string.format("$%.4f", b.cost)
-  end
-  return "  " .. table.concat(parts, "  │  ")
-end
-
-function UI:_setup_statusline()
-  local sl = "%!v:lua.PiChatStatusline()"
-  for _, win in ipairs({ self.conv_win, self.input_win }) do
-    if win and vim.api.nvim_win_is_valid(win) then
-      vim.wo[win].statusline = sl
-    end
-  end
-end
-
---- Update the pi-chat stats shown in the per-window statusline.
---- @param stats table { percent?, tokens?, context_window?, cost? }
-function UI:set_stats(stats)
-  for _, buf in ipairs({ self.conv_buf, self.input_buf }) do
-    if buf and vim.api.nvim_buf_is_valid(buf) then
-      vim.b[buf].pichat_stats = stats
-    end
-  end
-  -- Force a redraw of the statusline.
-  if vim.api.nvim_get_mode().mode ~= "c" then
-    pcall(vim.cmd, "redrawstatus")
-  end
 end
 
 --- Auto-resize the input window between 2 and 4 lines as content changes.
@@ -194,7 +187,6 @@ function UI:_set_conv_win_opts()
   vim.wo[w].foldlevel = 0 -- tool blocks start collapsed
   vim.wo[w].foldcolumn = "0" -- no fold gutter; use za/zR/zM instead
   vim.wo[w].signcolumn = "no"
-  vim.wo[w].winbar = CONV_WINBAR
 end
 
 function UI:_set_keymaps()
@@ -261,6 +253,11 @@ function UI:_set_keymaps()
     map(buf, { "n", "i" }, "<leader>pn", function()
       if self.on_new_session then
         self.on_new_session()
+      end
+    end)
+    map(buf, { "n", "i" }, "<leader>pi", function()
+      if self.on_toggle_info then
+        self.on_toggle_info()
       end
     end)
   end
@@ -383,23 +380,75 @@ function UI:append_stream(text)
   self:scroll_to_end()
 end
 
---- Update the conversation winbar with session name, model, run status, and
---- the persistent key hint for jumping / switching models.
-function UI:set_conv_winbar(status, model, session_name)
-  if self.conv_win and vim.api.nvim_win_is_valid(self.conv_win) then
-    local dot = status == "running…" and "●" or "○"
-    local name = session_name and (" " .. session_name .. "  │  ") or ""
-    vim.wo[self.conv_win].winbar = string.format(
-      "pi ❯ %s %s  │  %s%s  │  <leader>pn new · <leader>pm model · <leader>ps sessions",
-      dot,
-      status,
-      name,
-      model or "?"
-    )
+--- Open the floating info popup with the given lines. Idempotent: if already
+--- open, updates contents instead. Non-focusable, closes on toggle / close.
+function UI:open_info(lines)
+  if self.info_win and vim.api.nvim_win_is_valid(self.info_win) then
+    self:update_info(lines)
+    return
+  end
+  self.info_buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[self.info_buf].bufhidden = "wipe"
+  self:update_info(lines)
+  local width = 0
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
+  width = math.min(math.max(width + 2, 24), 60)
+  self.info_win = vim.api.nvim_open_win(self.info_buf, false, {
+    relative = "editor",
+    anchor = "NE",
+    row = 1,
+    col = vim.o.columns - 1,
+    width = width,
+    height = #lines,
+    style = "minimal",
+    border = "rounded",
+    focusable = false,
+    noautocmd = true,
+    zindex = 200,
+  })
+  pcall(function()
+    vim.wo[self.info_win].winhighlight = "Normal:PiChatInfo,FloatBorder:PiChatInfoBorder"
+  end)
+end
+
+--- Replace the info popup contents (resizes width/height to fit).
+function UI:update_info(lines)
+  if not (self.info_buf and vim.api.nvim_buf_is_valid(self.info_buf)) then
+    return
+  end
+  vim.bo[self.info_buf].modifiable = true
+  vim.api.nvim_buf_set_lines(self.info_buf, 0, -1, false, lines)
+  vim.bo[self.info_buf].modifiable = false
+  if self.info_win and vim.api.nvim_win_is_valid(self.info_win) then
+    local width = 0
+    for _, l in ipairs(lines) do
+      width = math.max(width, vim.fn.strdisplaywidth(l))
+    end
+    width = math.min(math.max(width + 2, 24), 60)
+    pcall(vim.api.nvim_win_set_config, self.info_win, {
+      relative = "editor",
+      anchor = "NE",
+      row = 1,
+      col = vim.o.columns - 1,
+      width = width,
+      height = #lines,
+    })
   end
 end
 
+--- Close the floating info popup if open.
+function UI:close_info()
+  if self.info_win and vim.api.nvim_win_is_valid(self.info_win) then
+    pcall(vim.api.nvim_win_close, self.info_win, true)
+  end
+  self.info_win = nil
+  self.info_buf = nil
+end
+
 function UI:close()
+  self:close_info()
   for _, win in ipairs({ self.input_win, self.conv_win }) do
     if win and vim.api.nvim_win_is_valid(win) then
       pcall(vim.api.nvim_win_close, win, true)

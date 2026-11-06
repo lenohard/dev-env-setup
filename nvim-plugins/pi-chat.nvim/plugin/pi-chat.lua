@@ -43,3 +43,7 @@ end, { desc = "Continue the most recent pi session" })
 vim.api.nvim_create_user_command("PiChatNew", function()
   pi().new_session()
 end, { desc = "Start a fresh pi session" })
+
+vim.api.nvim_create_user_command("PiChatInfo", function()
+  pi().toggle_info()
+end, { desc = "Toggle the pi-chat info popup" })

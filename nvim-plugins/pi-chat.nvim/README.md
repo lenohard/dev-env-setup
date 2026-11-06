@@ -65,6 +65,7 @@ to pi directly instead of going through the Agent Client Protocol.
 | `:PiChatSessions` | Pick a recent session to continue |
 | `:PiChatContinue` | Continue the most recent session |
 | `:PiChatModel` | Pick the model |
+| `:PiChatInfo` | Toggle the info popup (status / session / model / context / cost) |
 
 ## Keys (inside the chat)
 
@@ -75,12 +76,17 @@ to pi directly instead of going through the Agent Client Protocol.
 | `q` | both | Close chat |
 | `<Tab>` | both | Toggle focus between input / conversation |
 | `<leader>pn` | both | New session |
+| `<leader>pi` | both | Toggle info popup |
 | `<leader>pm` | both | Pick model |
 | `<leader>ps` | both | Pick / switch session |
 | `<C-v>` / `<leader>pp` | input | Paste a clipboard image (attached to next send) |
 | `<leader>po` | conversation | Open the image on the current line |
 | `]]` / `[[` | conversation | Jump to next / previous message |
 | `za` / `zM` / `zR` | conversation | Toggle / close-all / open-all folds |
+
+The input pane has a slightly tinted background so it's easy to tell apart
+from the conversation. Session status / model / context% / cost live in the
+info popup (`<leader>pi`), not in a persistent bar.
 
 ## Scope / limitations
 

@@ -52,7 +52,7 @@ return {
         dependencies = { "MeanderingProgrammer/render-markdown.nvim" },
         cmd = {
             "PiChat", "PiChatOpen", "PiChatClose", "PiChatAsk", "PiChatAskSelection",
-            "PiChatModel", "PiChatSessions", "PiChatContinue", "PiChatNew",
+            "PiChatModel", "PiChatSessions", "PiChatContinue", "PiChatNew", "PiChatInfo",
         },
         keys = {
             { "<leader>pc", "<cmd>PiChat<cr>", desc = "pi-chat toggle" },
@@ -78,6 +78,12 @@ return {
                 filetype = {
                     -- Calm preset for the pi-chat conversation buffer.
                     pichat = {
+                        -- render-markdown reads the GLOBAL editor mode, not the
+                        -- per-window mode. The input pane sits in insert mode
+                        -- while you type, so without 'i' here the conversation
+                        -- would show raw markdown (**bold**, # heading) until you
+                        -- left insert mode. Include 'i' so it always renders.
+                        render_modes = { "n", "c", "t", "i" },
                         heading = {
                             -- No full-width background blocks; small inline icon.
                             backgrounds = {},

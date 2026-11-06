@@ -39,6 +39,9 @@ function M.new(config)
     _ready = false,
     _assistant_shown = false, -- whether "▌ pi" header was shown this turn
     _final_pi_line = nil, -- line of the current response's ▌ pi header
+    _stats = nil, -- { cost, percent, tokens, context_window }
+    _info_open = false, -- whether the floating info popup is open
+    _exit_code = nil, -- set when the pi process exits
   }, Session)
 end
 
@@ -126,6 +129,9 @@ function Session:open()
     on_new_session = function()
       self:new_session()
     end,
+    on_toggle_info = function()
+      self:toggle_info()
+    end,
     on_paste_image = function()
       self:paste_image()
     end,
@@ -155,7 +161,6 @@ function Session:_refresh_state(is_initial)
       self._model = { provider = d.model.provider, id = d.model.id, name = d.model.name }
     end
     self._session_name = d.sessionName
-    self:_update_winbar()
     self:_refresh_stats()
     if is_initial and not self._ready then
       self._ready = true
@@ -181,16 +186,6 @@ function Session:_render_intro()
     "`za` toggles a tool block, `]]`/`[[` jump between messages.",
     "",
   })
-end
-
-function Session:_update_winbar()
-  if not (self.ui and self.ui:is_valid()) then
-    return
-  end
-  local model = self._model and (self._model.name or (self._model.provider .. "/" .. self._model.id))
-    or "?"
-  local status = self._busy and "running…" or "ready"
-  self.ui:set_conv_winbar(status, model, self._session_name)
 end
 
 function Session:_connect()
@@ -221,8 +216,9 @@ function Session:_connect()
       end
     end,
     on_exit = function(code, _signal)
-      if self.ui then
-        self.ui:set_conv_winbar("exited (" .. tostring(code) .. ")", self._model and (self._model.name or self._model.id) or "?")
+      self._exit_code = code
+      if self._info_open then
+        self:refresh_info()
       end
     end,
   })
@@ -303,14 +299,18 @@ function Session:_on_record(rec)
 
   if t == "session_info_changed" then
     self._session_name = rec.name
-    self:_update_winbar()
+    if self._info_open then
+      self:refresh_info()
+    end
     return
   end
 end
 
 function Session:_set_busy(busy)
   self._busy = busy
-  self:_update_winbar()
+  if self._info_open then
+    self:refresh_info()
+  end
 end
 
 --- Move the conversation window so the final pi response starts near the top,
@@ -332,7 +332,7 @@ function Session:_jump_to_final_output()
   end)
 end
 
---- Pull token/cost stats from pi and push them to the per-window statusline.
+--- Pull token/cost stats from pi; cache them and refresh the info popup if open.
 function Session:_refresh_stats()
   if not self.rpc or self.rpc:is_closed() then
     return
@@ -349,16 +349,76 @@ function Session:_refresh_stats()
       end
       return v
     end
-    local stats = {
+    self._stats = {
       cost = num(d.cost),
       percent = cu and num(cu.percent) or nil,
       tokens = cu and num(cu.tokens) or nil,
       context_window = cu and num(cu.contextWindow) or nil,
     }
-    if self.ui and self.ui:is_valid() and self.ui.set_stats then
-      self.ui:set_stats(stats)
+    if self._info_open then
+      self:refresh_info()
     end
   end)
+end
+
+--- Build the info-popup lines from the current cached state.
+function Session:_info_lines()
+  local model = self._model and (self._model.name or (self._model.provider .. "/" .. self._model.id))
+    or "?"
+  local status
+  if self._exit_code ~= nil then
+    status = "exited (" .. tostring(self._exit_code) .. ")"
+  elseif self._busy then
+    status = "running…"
+  else
+    status = "ready"
+  end
+  local s = self._stats or {}
+  local ctx
+  if s.percent ~= nil then
+    ctx = string.format("%.0f%%", s.percent)
+    if s.tokens and s.context_window then
+      ctx = ctx .. string.format(" (%d/%d)", s.tokens, s.context_window)
+    end
+  elseif s.tokens and s.context_window then
+    ctx = string.format("%d/%d", s.tokens, s.context_window)
+  else
+    ctx = "—"
+  end
+  local cost = s.cost ~= nil and string.format("$%.4f", s.cost) or "—"
+  return {
+    "  pi-chat  ",
+    "",
+    "  status   " .. status,
+    "  session  " .. (self._session_name or "new session"),
+    "  model    " .. model,
+    "  context  " .. ctx,
+    "  cost     " .. cost,
+  }
+end
+
+--- Toggle the floating info popup (status / session / model / context / cost).
+function Session:toggle_info()
+  if not (self.ui and self.ui:is_valid()) then
+    return
+  end
+  if self._info_open then
+    self.ui:close_info()
+    self._info_open = false
+    return
+  end
+  self._info_open = true
+  self.ui:open_info(self:_info_lines())
+  -- Refresh stats so the popup reflects the latest numbers.
+  self:_refresh_stats()
+end
+
+--- Re-render the info popup contents in place (no-op if it is closed).
+function Session:refresh_info()
+  if not (self._info_open and self.ui and self.ui:is_valid()) then
+    return
+  end
+  self.ui:update_info(self:_info_lines())
 end
 
 function Session:_begin_assistant()
@@ -369,10 +429,10 @@ function Session:_begin_assistant()
     self._assistant_shown = true
     self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
   else
-    -- A new assistant text segment after a tool block: separate it with a
-    -- blank line, then a fresh line to stream into. This keeps markdown from
-    -- abutting the fold's }}} marker.
-    self.ui:append({ "", "" })
+    -- A new assistant text segment after a tool block. _tool_end already left
+    -- exactly one blank line after the fold's }}} marker, so just open a fresh
+    -- line to stream into (no extra blanks, or they pile up).
+    self.ui:append({ "" })
     -- Point "jump to final output" at the start of this latest text segment.
     self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
   end
@@ -535,7 +595,9 @@ function Session:set_model(provider, id)
   self.rpc:send({ type = "set_model", provider = provider, modelId = id }, function(resp)
     if resp and resp.success and resp.data then
       self._model = { provider = resp.data.provider, id = resp.data.id, name = resp.data.name }
-      self:_update_winbar()
+      if self._info_open then
+        self:refresh_info()
+      end
       vim.notify("pi-chat: model → " .. (self._model.name or id), vim.log.levels.INFO)
     else
       vim.notify("pi-chat: set_model failed", vim.log.levels.WARN)
