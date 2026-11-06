@@ -150,7 +150,12 @@ if has("gui_running")
     set guioptions-=T
     set guioptions-=e
     set t_Co=256
-    set guitablabel=%M\ %t
+    " 'guitablabel' is Vim-only: nvim rejects it with E519 even when has('gui_running')
+    " is true (Neovide). exists('&guitablabel') returns 1 there anyway, so gate on engine.
+    " In nvim the tab label comes from 'tabline'.
+    if !has("nvim")
+        set guitablabel=%M\ %t
+    endif
 endif
 
 " Set utf8 as standard encoding and en_US as the standard language

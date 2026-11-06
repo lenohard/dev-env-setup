@@ -164,18 +164,12 @@ export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
 # Ripgrep Configuration
 export RIPGREP_CONFIG_PATH='~/.ripgreprc'
 
-# Homebrew Configuration
-export HOMEBREW_API_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api"
-export HOMEBREW_BOTTLE_DOMAIN="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
-export HOMEBREW_BREW_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/brew.git"
-export HOMEBREW_CORE_GIT_REMOTE="https://mirrors.tuna.tsinghua.edu.cn/git/homebrew/homebrew-core.git"
-export HOMEBREW_PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
-
 # Python Configuration
 alias pip='python -m pip'
 alias pip11='python3.11 -m pip'
 alias pip10='python3.10 -m pip'
-eval "$(pyenv init -)"
+# Avoid blocking shell startup on a stale rehash lock; run `pyenv rehash` when needed.
+eval "$(pyenv init - --no-rehash zsh)"
 eval "$(pyenv virtualenv-init -)"
 
 # Node Version Manager - Lazy loading
@@ -695,3 +689,9 @@ source ~/.host_zshrc
 END_TIME=$(($(gdate +%s%N)/1000000))
 ELAPSED=$((END_TIME - START_TIME))
 
+
+export PATH="$HOME/.local/bin:$PATH"
+
+
+# Added by Antigravity CLI installer
+export PATH="/Users/mathe/.local/bin:$PATH"
