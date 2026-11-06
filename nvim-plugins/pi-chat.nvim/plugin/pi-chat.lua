@@ -39,3 +39,7 @@ end, { desc = "Pick a recent pi session to continue" })
 vim.api.nvim_create_user_command("PiChatContinue", function()
   pi().continue()
 end, { desc = "Continue the most recent pi session" })
+
+vim.api.nvim_create_user_command("PiChatNew", function()
+  pi().new_session()
+end, { desc = "Start a fresh pi session" })

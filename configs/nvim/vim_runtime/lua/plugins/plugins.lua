@@ -52,11 +52,12 @@ return {
         dependencies = { "MeanderingProgrammer/render-markdown.nvim" },
         cmd = {
             "PiChat", "PiChatOpen", "PiChatClose", "PiChatAsk", "PiChatAskSelection",
-            "PiChatModel", "PiChatSessions", "PiChatContinue",
+            "PiChatModel", "PiChatSessions", "PiChatContinue", "PiChatNew",
         },
         keys = {
             { "<leader>pc", "<cmd>PiChat<cr>", desc = "pi-chat toggle" },
             { "<leader>pa", "<cmd>PiChatAsk<cr>", desc = "pi-chat ask" },
+            { "<leader>pn", "<cmd>PiChatNew<cr>", desc = "pi-chat new session" },
             { "<leader>pv", ":PiChatAskSelection<cr>", mode = "v", desc = "pi-chat ask selection" },
         },
         opts = {},

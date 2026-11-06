@@ -156,4 +156,16 @@ function M.continue()
   end
 end
 
+--- Start a fresh session, discarding the current conversation view.
+function M.new_session()
+  if not M.is_open() then
+    -- Opening already starts a fresh session; nothing more to do.
+    M.open()
+    return
+  end
+  if active then
+    active:new_session()
+  end
+end
+
 return M

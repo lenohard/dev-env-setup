@@ -123,6 +123,9 @@ function Session:open()
     on_pick_session = function()
       require("pi-chat").pick_session()
     end,
+    on_new_session = function()
+      self:new_session()
+    end,
     on_paste_image = function()
       self:paste_image()
     end,
@@ -156,22 +159,28 @@ function Session:_refresh_state(is_initial)
     self:_refresh_stats()
     if is_initial and not self._ready then
       self._ready = true
-      if self.ui and self.ui:is_valid() then
-        self.ui:clear()
-        self._intro_cleared = false
-        local name = self._session_name or "new session"
-        self.ui:append({
-          "# pi-chat",
-          "",
-          "_ready — " .. name .. "_",
-          "",
-          "Type below and press `<CR>` to ask. `<Tab>` switches panes,",
-          "`za` toggles a tool block, `]]`/`[[` jump between messages.",
-          "",
-        })
-      end
+      self:_render_intro()
     end
   end)
+end
+
+--- Render the fresh-session intro (used on first ready + after new_session).
+function Session:_render_intro()
+  if not (self.ui and self.ui:is_valid()) then
+    return
+  end
+  self.ui:clear()
+  self._intro_cleared = false
+  local name = self._session_name or "new session"
+  self.ui:append({
+    "# pi-chat",
+    "",
+    "_ready — " .. name .. "_",
+    "",
+    "Type below and press `<CR>` to ask. `<Tab>` switches panes,",
+    "`za` toggles a tool block, `]]`/`[[` jump between messages.",
+    "",
+  })
 end
 
 function Session:_update_winbar()
@@ -554,6 +563,40 @@ function Session:switch_session(session_path)
     -- The switch settles asynchronously: get_messages right after the response
     -- can still return the OLD (empty) session. Poll until history appears.
     self:_rebuild_from_history()
+    self:_refresh_state(false)
+  end)
+end
+
+--- Reset all per-turn / conversation rendering state (shared by new_session
+--- and history rebuild).
+function Session:_reset_conv_state()
+  self._last_role = nil
+  self._assistant_streaming = false
+  self._assistant_shown = false
+  self._final_pi_line = nil
+  self._tools = {}
+end
+
+--- Start a fresh session (discard the current conversation). pi keeps the old
+--- session file on disk; this just swaps the live session to a new empty one.
+function Session:new_session()
+  if not self.rpc or self.rpc:is_closed() then
+    return
+  end
+  self.rpc:send({ type = "new_session" }, function(resp)
+    if not (resp and resp.success) then
+      vim.notify("pi-chat: new_session failed", vim.log.levels.WARN)
+      return
+    end
+    if resp.data and resp.data.cancelled then
+      return
+    end
+    self:_reset_conv_state()
+    self._session_name = nil
+    if self.ui and self.ui:is_valid() then
+      self:_render_intro()
+    end
+    -- Pull the new session's state (name/model/stats) and reflect it.
     self:_refresh_state(false)
   end)
 end

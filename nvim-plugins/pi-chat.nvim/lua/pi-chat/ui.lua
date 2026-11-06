@@ -13,8 +13,7 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("pi_chat")
 
--- Persistent winbar hints (always visible so the user never has to remember keys).
-local INPUT_WINBAR = "pi ❯ input  │  <CR> send  ·  <C-v> paste-img  ·  <Tab> panes  ·  <C-c> abort  ·  q quit"
+-- Persistent winbar hint (always visible so the user never has to remember keys).
 local CONV_WINBAR = "pi ❯ conversation"
 
 -- Highlight groups for role separators. Linked to common groups so they adapt
@@ -78,7 +77,7 @@ function M.open(opts)
   vim.bo[self.conv_buf].swapfile = false
   vim.bo[self.conv_buf].filetype = "pichat"
   vim.bo[self.conv_buf].modifiable = false
-  vim.api.nvim_buf_set_name(self.conv_buf, "pi-chat://conversation")
+  vim.api.nvim_buf_set_name(self.conv_buf, "pi-chat")
 
   -- Input buffer (scratch). Plain filetype — no markdown rendering while typing.
   self.input_buf = vim.api.nvim_create_buf(false, true)
@@ -89,21 +88,34 @@ function M.open(opts)
   vim.api.nvim_buf_set_name(self.input_buf, "pi-chat://input")
 
   -- Layout: a dedicated full-screen tab. Conversation fills the tab; a small
-  -- input split sits at the bottom. Starts at 1 line and auto-grows up to 4.
+  -- input split sits at the bottom. Starts at 2 lines and auto-grows up to 4.
+  --
+  -- `tabnew` opens an empty [No Name] scratch buffer in the new tab; we swap in
+  -- conv_buf and then wipe that leftover buffer so it never shows in the
+  -- buffer list or tabline.
   vim.cmd("tabnew")
   self.tabpage = vim.api.nvim_get_current_tabpage()
+  local leftover = vim.api.nvim_get_current_buf()
   self.conv_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(self.conv_win, self.conv_buf)
   self:_set_conv_win_opts()
+  if leftover ~= self.conv_buf
+    and vim.api.nvim_buf_is_valid(leftover)
+    and vim.api.nvim_buf_get_name(leftover) == ""
+    and vim.bo[leftover].buftype == ""
+  then
+    pcall(vim.api.nvim_buf_delete, leftover, { force = true })
+  end
+  -- Fixed tab title (read by common tablines; also drives the default label).
+  pcall(vim.api.nvim_tabpage_set_var, self.tabpage, "pichat", true)
 
   vim.cmd("belowright 1split")
   self.input_win = vim.api.nvim_get_current_win()
   vim.api.nvim_win_set_buf(self.input_win, self.input_buf)
   vim.wo[self.input_win].number = false
   vim.wo[self.input_win].relativenumber = false
-  vim.wo[self.input_win].winbar = INPUT_WINBAR
   vim.wo[self.input_win].winfixheight = true
-  vim.api.nvim_win_set_height(self.input_win, 1)
+  vim.api.nvim_win_set_height(self.input_win, 2)
   self:_setup_input_autogrow()
 
   self:_set_keymaps()
@@ -154,9 +166,9 @@ function UI:set_stats(stats)
   end
 end
 
---- Auto-resize the input window between 1 and 4 lines as content changes.
+--- Auto-resize the input window between 2 and 4 lines as content changes.
 function UI:_setup_input_autogrow()
-  local MIN, MAX = 1, 4
+  local MIN, MAX = 2, 4
   local function resize()
     if not (self.input_win and vim.api.nvim_win_is_valid(self.input_win)) then
       return
@@ -244,6 +256,11 @@ function UI:_set_keymaps()
     map(buf, { "n", "i" }, "<leader>ps", function()
       if self.on_pick_session then
         self.on_pick_session()
+      end
+    end)
+    map(buf, { "n", "i" }, "<leader>pn", function()
+      if self.on_new_session then
+        self.on_new_session()
       end
     end)
   end
@@ -373,7 +390,7 @@ function UI:set_conv_winbar(status, model, session_name)
     local dot = status == "running…" and "●" or "○"
     local name = session_name and (" " .. session_name .. "  │  ") or ""
     vim.wo[self.conv_win].winbar = string.format(
-      "pi ❯ %s %s  │  %s%s  │  <leader>pm model · <leader>ps sessions",
+      "pi ❯ %s %s  │  %s%s  │  <leader>pn new · <leader>pm model · <leader>ps sessions",
       dot,
       status,
       name,

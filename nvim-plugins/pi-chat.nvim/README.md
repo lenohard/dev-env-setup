@@ -35,10 +35,11 @@ to pi directly instead of going through the Agent Client Protocol.
 {
   dir = vim.fn.expand("~/dev-env-setup/nvim-plugins/pi-chat.nvim"),
   dependencies = { "MeanderingProgrammer/render-markdown.nvim" },
-  cmd = { "PiChat", "PiChatOpen", "PiChatAsk", "PiChatAskSelection" },
+  cmd = { "PiChat", "PiChatOpen", "PiChatAsk", "PiChatAskSelection", "PiChatNew" },
   keys = {
     { "<leader>pc", "<cmd>PiChat<cr>", desc = "pi-chat toggle" },
     { "<leader>pa", "<cmd>PiChatAsk<cr>", desc = "pi ask" },
+    { "<leader>pn", "<cmd>PiChatNew<cr>", desc = "pi-chat new session" },
     { "<leader>pv", ":PiChatAskSelection<cr>", mode = "v", desc = "pi ask selection" },
   },
   opts = {
@@ -60,6 +61,10 @@ to pi directly instead of going through the Agent Client Protocol.
 | `:PiChatClose` | Close the chat and stop the agent |
 | `:PiChatAsk [text]` | Open and send a prompt |
 | `:PiChatAskSelection` | Ask about the visual selection (with a question) |
+| `:PiChatNew` | Start a fresh session (discard the current conversation) |
+| `:PiChatSessions` | Pick a recent session to continue |
+| `:PiChatContinue` | Continue the most recent session |
+| `:PiChatModel` | Pick the model |
 
 ## Keys (inside the chat)
 
@@ -69,13 +74,17 @@ to pi directly instead of going through the Agent Client Protocol.
 | `<C-c>` | both | Abort current turn |
 | `q` | both | Close chat |
 | `<Tab>` | both | Toggle focus between input / conversation |
-| `]]` / `[[` | conversation | Jump to next / previous heading |
+| `<leader>pn` | both | New session |
+| `<leader>pm` | both | Pick model |
+| `<leader>ps` | both | Pick / switch session |
+| `<C-v>` / `<leader>pp` | input | Paste a clipboard image (attached to next send) |
+| `<leader>po` | conversation | Open the image on the current line |
+| `]]` / `[[` | conversation | Jump to next / previous message |
 | `za` / `zM` / `zR` | conversation | Toggle / close-all / open-all folds |
 
 ## Scope / limitations
 
 - One active chat at a time.
-- Images: not sent yet (text only).
 - Diff preview for edit/write tools is not rendered; the raw tool result is
   shown in the collapsed block.
 - `editor` dialogs open a floating scratch buffer (`<C-s>` or `:w` to submit).
