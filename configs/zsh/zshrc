@@ -185,38 +185,37 @@ alias pip10='python3.10 -m pip'
 eval "$(pyenv init - --no-rehash zsh)"
 eval "$(pyenv virtualenv-init -)"
 
-# Node Version Manager - Lazy loading
-export NVM_DIR="$HOME/.nvm"
-# Create placeholder functions for nvm, node, npm, etc.
-function nvm() {
-  unset -f nvm node npm npx yarn
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  nvm "$@"
+# Node Version Manager - lazy loading (macOS Homebrew + Linux installs)
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+# Find nvm.sh; empty + non-zero when nvm isn't installed on this host.
+_nvm_find_sh() {
+  local f
+  for f in \
+    "$NVM_DIR/nvm.sh" \
+    "/opt/homebrew/opt/nvm/nvm.sh" \
+    "/usr/local/opt/nvm/nvm.sh" \
+    "/usr/share/nvm/nvm.sh" \
+    "/etc/profile.d/nvm.sh"; do
+    [[ -s "$f" ]] && { print -r -- "$f"; return 0 }
+  done
+  return 1
 }
-
-function node() {
+# Load nvm on first use of nvm/node/npm/npx/yarn, then run the real command.
+_nvm_lazy() {
+  local cmd="$1"; shift
+  local sh
+  sh="$(_nvm_find_sh)" || {
+    print -u2 "nvm: not installed on this host (looked in \$NVM_DIR, /opt/homebrew, /usr/local, /usr/share)"
+    return 127
+  }
   unset -f nvm node npm npx yarn
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  node "$@"
+  \. "$sh"
+  "$cmd" "$@"
 }
-
-function npm() {
-  unset -f nvm node npm npx yarn
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  npm "$@"
-}
-
-function npx() {
-  unset -f nvm node npm npx yarn
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  npx "$@"
-}
-
-function yarn() {
-  unset -f nvm node npm npx yarn
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"
-  yarn "$@"
-}
+for _nvm_cmd in nvm node npm npx yarn; do
+  eval "${_nvm_cmd}() { _nvm_lazy ${_nvm_cmd} \"\$@\"; }"
+done
+unset _nvm_cmd
 
 # Go Version Manager
 # Disabled 2026-06: GVM's _bash_pseudo_hash (bash-only) spams "command not found: _encode/_decode"
@@ -599,18 +598,33 @@ bindkey '^o' zoxide-insert
 # bindkey -M viins '^o' zoxide-insert
 
 # so cherry-studio can use this token to fetch the latest personal updates without ratelimit error
-launchctl setenv GH_TOKEN "$GH_TOKEN"
+# macOS only: hand the token to GUI-launched apps. No-op elsewhere.
+if [[ $OSTYPE == darwin* ]] && (( $+commands[launchctl] )) && [[ -n ${GH_TOKEN:-} ]]; then
+  launchctl setenv GH_TOKEN "$GH_TOKEN" 2>/dev/null
+fi
 
-nvm use v24.13.0
+# Pin node to $NVM_DEFAULT (default v24.13.0) only when nvm and that version exist.
+_nvm_pin="${NVM_DEFAULT:-v24.13.0}"
+if [[ -d "${NVM_DIR:-$HOME/.nvm}/versions/node/${_nvm_pin}" ]] && _nvm_find_sh >/dev/null; then
+  nvm use "${_nvm_pin}" >/dev/null 2>&1 || true
+fi
+unset _nvm_pin
 
-alias sim-media='xcrun simctl addmedia booted'
-alias sim-path='xcrun simctl get_app_container booted'
+# iOS simulator helpers (macOS only)
+if [[ $OSTYPE == darwin* ]]; then
+  alias sim-media='xcrun simctl addmedia booted'
+  alias sim-path='xcrun simctl get_app_container booted'
+fi
 
 # Added by Antigravity
 export PATH="$HOME/.antigravity/antigravity/bin:$PATH"
 
-export JAVA_HOME=/opt/homebrew/opt/openjdk@21
-export PATH="$JAVA_HOME/bin:/opt/homebrew/opt/libpq/bin:$PATH"
+# Homebrew JDK / libpq (macOS only; skip when absent so JAVA_HOME isn't bogus)
+if [[ -d /opt/homebrew/opt/openjdk@21 ]]; then
+  export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
+[[ -d /opt/homebrew/opt/libpq/bin ]] && export PATH="/opt/homebrew/opt/libpq/bin:$PATH"
 
 # Added by AntiHook
 export PATH="$HOME/.local/bin/Antihub:$PATH"
@@ -665,8 +679,13 @@ swapfiles() {
 
 alias swap=swapfiles
 # <<< swapfiles <<<
-export PATH="/opt/homebrew/opt/trash-cli/bin:$PATH"
-alias rm='trash'
+# trash-cli: macOS Homebrew ships `trash`, the Python package ships `trash-put`.
+[[ -d /opt/homebrew/opt/trash-cli/bin ]] && export PATH="/opt/homebrew/opt/trash-cli/bin:$PATH"
+if (( $+commands[trash] )); then
+  alias rm='trash'
+elif (( $+commands[trash-put] )); then
+  alias rm='trash-put'
+fi
 
 export PATH="$PATH:$HOME/kit"
 alias gtheme='~/kit/ghostty-theme-switch.sh'
@@ -676,8 +695,6 @@ export PATH="$HOME/.grok/bin:$PATH"
 fpath=(~/.grok/completions/zsh $fpath)
 autoload -Uz compinit && compinit -C
 # <<< grok installer <<<
-
-echo "ZSH loaded in $ELAPSED ms"
 
 # Set local HTTP/HTTPS and SOCKS proxies. Usage: setproxy [port]
 setproxy() {
@@ -711,6 +728,15 @@ export PATH="$HOME/.local/bin:$PATH"
 # Machine-local bins (same layout on every host)
 export PATH="$HOME/.local/bin:$PATH"
 
-# bbweb / piweb run as launchd services (com.senaca.bbweb / com.pi-web); aliases just open the UI
-alias bbweb="open http://127.0.0.1:38886"
-alias piweb="open http://127.0.0.1:8964"
+# bbweb / piweb run as background services (launchd on macOS, systemd on Linux); aliases just open the UI
+_open_url() {
+  if [[ $OSTYPE == darwin* ]]; then
+    open "$@"
+  else
+    xdg-open "$@" >/dev/null 2>&1 &
+  fi
+}
+alias bbweb="_open_url http://127.0.0.1:38886"
+alias piweb="_open_url http://127.0.0.1:8964"
+
+echo "ZSH loaded in ${ELAPSED} ms"
