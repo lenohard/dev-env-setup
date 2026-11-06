@@ -7,7 +7,13 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # Amazon Q pre block. Keep at the top of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.pre.zsh"
-START_TIME=$(($(gdate +%s%N)/1000000))
+# portable millisecond clock: zsh EPOCHREALTIME (macOS + Linux), gdate as fallback
+if [[ -n ${EPOCHREALTIME:-} ]]; then
+  _now_ms() { print -r -- $(( ${EPOCHREALTIME/[.,]/} / 1000 )); }
+else
+  _now_ms() { print -r -- $(( $(gdate +%s%N) / 1000000 )); }
+fi
+START_TIME=$(_now_ms)
 
 # == Added on 2025-02-08 21:09:06 ==
 # export PATH="$HOME/.cargo/bin:$PATH"
@@ -77,8 +83,11 @@ export ANDROID_SDK_ROOT=~/local/android-sdk
 export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/emulator:$ANDROID_HOME/platform-tools:$PATH
 
 # Java Configuration
-export JAVA_HOME="$(brew --prefix)/opt/openjdk@17"
-export PATH="$JAVA_HOME/bin:$PATH"
+# Java Configuration (only where Homebrew coreutils exists, e.g. macOS)
+if command -v brew >/dev/null 2>&1; then
+  export JAVA_HOME="$(brew --prefix)/opt/openjdk@17"
+  export PATH="$JAVA_HOME/bin:$PATH"
+fi
 
 # Zinit Plugin Manager
 if [[ ! -f $HOME/.local/share/zinit/zinit.git/zinit.zsh ]]; then
@@ -694,7 +703,7 @@ setproxy() {
 
 # Host-specific configuration (per-machine, not in dev-env-setup)
 source ~/.host_zshrc
-END_TIME=$(($(gdate +%s%N)/1000000))
+END_TIME=$(_now_ms)
 ELAPSED=$((END_TIME - START_TIME))
 
 

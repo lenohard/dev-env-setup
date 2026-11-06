@@ -55,15 +55,18 @@ alias ibook='du -sh /Users/senaca/Library/Containers/com.apple.BKAgentService/Da
 alias rrm='/opt/homebrew/bin/grm'
 
 # GNU coreutils aliases
-alias cp="gcp"
-alias mv="gmv"
-alias ls="gls --color=auto"
-alias mkdir="gmkdir"
-alias rm="grm"
-alias ln="gln"
-alias df="gdf"
-alias du="gdu"
-alias cat="gcat"
-alias grep="ggrep"
-alias sort="gsort"
-alias uniq="guniq"
+# GNU coreutils aliases (only when Homebrew coreutils is installed, e.g. macOS)
+if command -v gcp >/dev/null 2>&1; then
+  alias cp="gcp"
+  alias mv="gmv"
+  alias ls="gls --color=auto"
+  alias mkdir="gmkdir"
+  alias rm="grm"
+  alias ln="gln"
+  alias df="gdf"
+  alias du="gdu"
+  alias cat="gcat"
+  alias grep="ggrep"
+  alias sort="gsort"
+  alias uniq="guniq"
+fi
