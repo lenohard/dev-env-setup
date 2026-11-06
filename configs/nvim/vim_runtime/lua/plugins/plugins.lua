@@ -46,6 +46,64 @@ return {
     },
     { "pablopunk/pi.nvim" },
     {
+        -- pi-chat.nvim: Neovim front-end for the pi coding agent via RPC mode.
+        -- Local plugin, source lives in the dev-env-setup repo.
+        dir = vim.fn.expand("~/dev-env-setup/nvim-plugins/pi-chat.nvim"),
+        dependencies = { "MeanderingProgrammer/render-markdown.nvim" },
+        cmd = {
+            "PiChat", "PiChatOpen", "PiChatClose", "PiChatAsk", "PiChatAskSelection",
+            "PiChatModel", "PiChatSessions", "PiChatContinue",
+        },
+        keys = {
+            { "<leader>pc", "<cmd>PiChat<cr>", desc = "pi-chat toggle" },
+            { "<leader>pa", "<cmd>PiChatAsk<cr>", desc = "pi-chat ask" },
+            { "<leader>pv", ":PiChatAskSelection<cr>", mode = "v", desc = "pi-chat ask selection" },
+        },
+        opts = {},
+        config = function(_, opts)
+            require("pi-chat").setup(opts)
+        end,
+    },
+    {
+        -- render-markdown: pulled in by pi-chat. Default behaviour for real
+        -- markdown files is unchanged; we only ADD a soft style for pi-chat's
+        -- dedicated `pichat` filetype so the conversation reads calmly.
+        "MeanderingProgrammer/render-markdown.nvim",
+        dependencies = { "nvim-tree/nvim-web-devicons" },
+        ft = { "markdown", "pichat" },
+        opts = {
+            file_types = { "markdown", "pichat" },
+            overrides = {
+                filetype = {
+                    -- Calm preset for the pi-chat conversation buffer.
+                    pichat = {
+                        heading = {
+                            -- No full-width background blocks; small inline icon.
+                            backgrounds = {},
+                            icons = { "▸ ", "▸ ", "▸ ", "▸ ", "▸ ", "▸ " },
+                            position = "inline",
+                            width = "block",
+                            left_pad = 0,
+                            right_pad = 1,
+                            sign = false,
+                        },
+                        code = {
+                            -- Quiet code blocks: subtle background, no heavy border,
+                            -- language name shown but no big banner.
+                            style = "normal",
+                            border = "thin",
+                            sign = false,
+                            left_pad = 1,
+                            right_pad = 1,
+                        },
+                        dash = { enabled = false }, -- we draw our own role rules
+                        sign = { enabled = false },
+                    },
+                },
+            },
+        },
+    },
+    {
         "nvim-pack/nvim-spectre",
         dependencies = { "nvim-lua/plenary.nvim" },
         config = function()

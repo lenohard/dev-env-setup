@@ -150,7 +150,10 @@ if has("gui_running")
     set guioptions-=T
     set guioptions-=e
     set t_Co=256
-    set guitablabel=%M\ %t
+    " Neovim (incl. Neovide) has no 'guitablabel' support -> E519
+    if !has('nvim')
+        set guitablabel=%M\ %t
+    endif
 endif
 
 " Set utf8 as standard encoding and en_US as the standard language

@@ -616,7 +616,9 @@ export BUN_INSTALL="$HOME/.bun"
 export PATH="$BUN_INSTALL/bin:$PATH"
 
 # ai shell
-source $HOME/projects/ai-shell/zsh/ai-shell-simple.zsh
+if [ -f "$HOME/projects/ai-shell/zsh/ai-shell-simple.zsh" ]; then
+  source "$HOME/projects/ai-shell/zsh/ai-shell-simple.zsh"
+fi
 
 # >>> swapfiles >>>
 # Swap two files (swap their paths/names): swapfiles a b
@@ -695,3 +697,12 @@ source ~/.host_zshrc
 END_TIME=$(($(gdate +%s%N)/1000000))
 ELAPSED=$((END_TIME - START_TIME))
 
+
+export PATH="$HOME/.local/bin:$PATH"
+
+# Added by cua-driver-rs installer — see https://github.com/trycua/cua
+export PATH="/Users/senaca/.local/bin:$PATH"
+
+# bbweb / piweb run as launchd services (com.senaca.bbweb / com.pi-web); aliases just open the UI
+alias bbweb="open http://127.0.0.1:38886"
+alias piweb="open http://127.0.0.1:8964"
