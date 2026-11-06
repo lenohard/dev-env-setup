@@ -37,6 +37,8 @@ function M.new(config)
     _model = nil, -- { provider, id, name }
     _session_name = nil,
     _ready = false,
+    _assistant_shown = false, -- whether "▌ pi" header was shown this turn
+    _final_pi_line = nil, -- line of the current response's ▌ pi header
   }, Session)
 end
 
@@ -96,6 +98,10 @@ local function result_to_lines(result)
   if #out == 0 then
     out = { "(no text output)" }
   end
+  -- Trim trailing blank lines (tool output often ends with a newline).
+  while #out > 1 and out[#out]:match("^%s*$") do
+    out[#out] = nil
+  end
   return out
 end
 
@@ -147,6 +153,7 @@ function Session:_refresh_state(is_initial)
     end
     self._session_name = d.sessionName
     self:_update_winbar()
+    self:_refresh_stats()
     if is_initial and not self._ready then
       self._ready = true
       if self.ui and self.ui:is_valid() then
@@ -273,6 +280,10 @@ function Session:_on_record(rec)
 
   if t == "agent_settled" then
     self:_set_busy(false)
+    -- Jump the reader to the start of the final pi response (not the bottom),
+    -- so a long answer is read from its beginning.
+    self:_jump_to_final_output()
+    self:_refresh_stats()
     return
   end
 
@@ -293,15 +304,76 @@ function Session:_set_busy(busy)
   self:_update_winbar()
 end
 
-function Session:_begin_assistant()
-  if self._last_role ~= "assistant" then
-    self.ui:append_role(role_line("pi"))
-    self._last_role = "assistant"
+--- Move the conversation window so the final pi response starts near the top,
+--- letting the reader start a long answer from its beginning. Positions the
+--- recorded header line at the top of the window (zt) without changing focus.
+function Session:_jump_to_final_output()
+  local line = self._final_pi_line
+  if not line then
+    return
   end
+  if not (self.ui and self.ui.conv_win and vim.api.nvim_win_is_valid(self.ui.conv_win)) then
+    return
+  end
+  local last = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+  line = math.min(line, last)
+  vim.api.nvim_win_call(self.ui.conv_win, function()
+    pcall(vim.api.nvim_win_set_cursor, self.ui.conv_win, { line, 0 })
+    vim.cmd("normal! zt")
+  end)
+end
+
+--- Pull token/cost stats from pi and push them to the per-window statusline.
+function Session:_refresh_stats()
+  if not self.rpc or self.rpc:is_closed() then
+    return
+  end
+  self.rpc:send({ type = "get_session_stats" }, function(resp)
+    if not (resp and resp.success and resp.data) then
+      return
+    end
+    local d = resp.data
+    local cu = d.contextUsage
+    local function num(v)
+      if v == nil or v == vim.NIL then
+        return nil
+      end
+      return v
+    end
+    local stats = {
+      cost = num(d.cost),
+      percent = cu and num(cu.percent) or nil,
+      tokens = cu and num(cu.tokens) or nil,
+      context_window = cu and num(cu.contextWindow) or nil,
+    }
+    if self.ui and self.ui:is_valid() and self.ui.set_stats then
+      self.ui:set_stats(stats)
+    end
+  end)
+end
+
+function Session:_begin_assistant()
+  -- One "▌ pi" header per assistant response, even across interleaved tool
+  -- calls. _assistant_shown is reset on user submit.
+  if not self._assistant_shown then
+    self.ui:append_role(role_line("pi"))
+    self._assistant_shown = true
+    self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+  else
+    -- A new assistant text segment after a tool block: separate it with a
+    -- blank line, then a fresh line to stream into. This keeps markdown from
+    -- abutting the fold's }}} marker.
+    self.ui:append({ "", "" })
+    -- Point "jump to final output" at the start of this latest text segment.
+    self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+  end
+  self._last_role = "assistant"
   self._assistant_streaming = true
 end
 
 function Session:_ensure_assistant()
+  -- Open a new assistant segment whenever we are not already streaming one
+  -- (e.g. right after a tool block, which sets _assistant_streaming=false).
   if not self._assistant_streaming or self._last_role ~= "assistant" then
     self:_begin_assistant()
   end
@@ -309,10 +381,10 @@ end
 
 function Session:_tool_start(rec)
   local summary = tool_summary(rec.toolName, rec.args)
-  -- Fold marker in the header line; closing marker written at tool_end. Use a
-  -- non-heading bar prefix so render-markdown leaves it alone.
-  local header = role_line("🔧 " .. summary)
-  self.ui:append({ "", header .. " {{{1", "  _running…_" })
+  -- Compact tool header: a light indented marker (NOT the ▌ role bar) so it
+  -- reads as part of pi's turn, not a new speaker. Fold marker collapses it.
+  local header = "   ⚙ " .. summary
+  self.ui:append({ header .. " {{{1", "    ··· running" })
   local line_count = vim.api.nvim_buf_line_count(self.ui.conv_buf)
   self._tools[rec.toolCallId] = {
     body_start = line_count, -- 1-based line of the "_running…_" placeholder
@@ -326,10 +398,18 @@ function Session:_tool_end(rec)
   local status = rec.isError and "✗ error" or "✓ done"
   local dur = rec.durationMs and (" · " .. rec.durationMs .. "ms") or ""
 
-  local body = { "  " .. status .. dur, "```" }
-  vim.list_extend(body, lines)
-  body[#body + 1] = "```"
+  -- Render the tool output as indented plain lines, NOT a ``` fenced block.
+  -- Fenced blocks inside the fold collide with the conversation's own markdown
+  -- (render-markdown mis-parses), and tool output may itself contain ```.
+  -- Indentation keeps it visually distinct and markdown-inert.
+  local body = { "    " .. status .. dur }
+  for _, l in ipairs(lines) do
+    body[#body + 1] = "    │ " .. l
+  end
+  -- Close the fold, then a blank line so following assistant text / markdown
+  -- never abuts the }}} marker.
   body[#body + 1] = "}}}"
+  body[#body + 1] = ""
 
   if entry and entry.body_start then
     -- Replace the "_running…_" placeholder line with the real body.
@@ -343,6 +423,10 @@ function Session:_tool_end(rec)
     self.ui:append(body)
   end
   self._tools[rec.toolCallId] = nil
+  -- A tool block ended; the next assistant delta must start on a fresh line,
+  -- not glued to the fold. Force _ensure_assistant to open a new line.
+  self._last_role = "tool"
+  self._assistant_streaming = false
 end
 
 function Session:submit(text)
@@ -372,6 +456,9 @@ function Session:submit(text)
     self.ui:append({ "_(" .. #images .. " image(s) attached)_" })
   end
   self._last_role = "user"
+  -- New user turn: allow one fresh "▌ pi" header for the upcoming response.
+  self._assistant_shown = false
+  self._final_pi_line = nil
 
   if self._busy then
     self.rpc:steer(text, images)

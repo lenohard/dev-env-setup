@@ -107,8 +107,51 @@ function M.open(opts)
   self:_setup_input_autogrow()
 
   self:_set_keymaps()
+  self:_setup_statusline()
   self:focus_input()
   return self
+end
+
+-- Per-window statusline for pi-chat buffers only. Reads a buffer-local stats
+-- table (set via UI:set_stats) so the global lualine is untouched elsewhere.
+function _G.PiChatStatusline()
+  local b = vim.b.pichat_stats
+  if not b then
+    return "  pi-chat"
+  end
+  local parts = { "  pi-chat" }
+  if b.percent ~= nil then
+    parts[#parts + 1] = string.format("ctx %.0f%%%%", b.percent)
+  elseif b.tokens and b.context_window then
+    parts[#parts + 1] = string.format("ctx %d/%d", b.tokens, b.context_window)
+  end
+  if b.cost ~= nil then
+    parts[#parts + 1] = string.format("$%.4f", b.cost)
+  end
+  return "  " .. table.concat(parts, "  │  ")
+end
+
+function UI:_setup_statusline()
+  local sl = "%!v:lua.PiChatStatusline()"
+  for _, win in ipairs({ self.conv_win, self.input_win }) do
+    if win and vim.api.nvim_win_is_valid(win) then
+      vim.wo[win].statusline = sl
+    end
+  end
+end
+
+--- Update the pi-chat stats shown in the per-window statusline.
+--- @param stats table { percent?, tokens?, context_window?, cost? }
+function UI:set_stats(stats)
+  for _, buf in ipairs({ self.conv_buf, self.input_buf }) do
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+      vim.b[buf].pichat_stats = stats
+    end
+  end
+  -- Force a redraw of the statusline.
+  if vim.api.nvim_get_mode().mode ~= "c" then
+    pcall(vim.cmd, "redrawstatus")
+  end
 end
 
 --- Auto-resize the input window between 1 and 4 lines as content changes.
