@@ -44,6 +44,14 @@ function M.new(config)
     _stats = nil, -- { cost, percent, tokens, context_window }
     _info_open = false, -- whether the floating info popup is open
     _exit_code = nil, -- set when the pi process exits
+    _busy_since = nil, -- uv.now() ms when the current run started
+    _last_event_at = nil, -- uv.now() ms of the last record from pi (liveness)
+    _last_text_at = nil, -- uv.now() ms of the last answer text delta
+    _phase = nil, -- "waiting" | "thinking" | "tool" | "answering"
+    _tool_name = nil,
+    _info_auto = false, -- popup was opened automatically (and may auto-close)
+    _info_user_closed = false, -- user closed the popup during this run
+    _tick = nil, -- uv timer driving the live status popup
   }, Session)
 end
 
@@ -181,6 +189,7 @@ end
 
 function Session:_on_record(rec)
   local t = rec.type
+  self._last_event_at = vim.uv.now()
   if t == "extension_ui_request" then
     -- Status/notify records are transient UI chrome (live-status, reminder
     -- counters); surface them via vim.notify only, never in the transcript.
@@ -202,8 +211,14 @@ function Session:_on_record(rec)
     -- Only assistant answer text reaches the buffer. thinking_delta (and every
     -- other delta type) is dropped here, before it can touch the markdown.
     if ev and ev.type == "text_delta" and ev.delta then
+      self._phase = "answering"
+      self._last_text_at = vim.uv.now()
+      self:_auto_close_info() -- the answer itself is the progress indicator now
       self:_ensure_assistant()
       self.ui:append_stream(ev.delta)
+    elseif ev and ev.type == "thinking_delta" then
+      -- Never rendered; only feeds the live status popup.
+      self._phase = "thinking"
     end
     return
   end
@@ -223,6 +238,12 @@ function Session:_on_record(rec)
   -- into separate paragraphs (text -> tool -> more text), so end the current
   -- text segment and let the next delta open a fresh one.
   if t == "tool_execution_start" or t == "tool_execution_end" then
+    if t == "tool_execution_start" then
+      self._phase = "tool"
+      self._tool_name = rec.toolName
+    else
+      self._phase = "waiting"
+    end
     self:_end_segment()
     return
   end
@@ -256,12 +277,84 @@ function Session:_on_record(rec)
 end
 
 function Session:_set_busy(busy)
+  local was_busy = self._busy
   self._busy = busy
+  if busy and not was_busy then
+    self._busy_since = vim.uv.now()
+    self._last_event_at = self._busy_since
+    self._last_text_at = nil
+    self._phase = "waiting"
+    self._tool_name = nil
+    self:_start_tick()
+  elseif not busy then
+    self._phase = nil
+    self:_stop_tick()
+    self:_auto_close_info()
+  end
   if self.ui and self.ui.set_busy then
     self.ui:set_busy(busy)
   end
   if self._info_open then
     self:refresh_info()
+  end
+end
+
+--- While a run is active, re-render the status popup 4x/second (spinner,
+--- elapsed time, seconds since the last event from pi). If no answer text has
+--- arrived for 1.5s the popup is (re)opened automatically.
+function Session:_start_tick()
+  if self._tick then
+    return
+  end
+  local timer = vim.uv.new_timer()
+  self._tick = timer
+  timer:start(
+    250,
+    250,
+    vim.schedule_wrap(function()
+      if not (self._busy and self.ui and self.ui:is_valid()) then
+        self:_stop_tick()
+        return
+      end
+      local quiet = not self._last_text_at or (vim.uv.now() - self._last_text_at) > 1500
+      if quiet and not self._info_open and not self._info_user_closed then
+        self:_auto_open_info()
+      elseif self._info_open then
+        self:refresh_info()
+      end
+    end)
+  )
+end
+
+function Session:_stop_tick()
+  local timer = self._tick
+  self._tick = nil
+  if timer then
+    timer:stop()
+    if not timer:is_closing() then
+      timer:close()
+    end
+  end
+end
+
+--- Show the status popup on its own (not toggled by the user).
+function Session:_auto_open_info()
+  if self._info_open or not (self.ui and self.ui:is_valid()) then
+    return
+  end
+  self._info_open = true
+  self._info_auto = true
+  self.ui:open_info(self:_info_lines())
+end
+
+--- Close the status popup only if it was opened automatically.
+function Session:_auto_close_info()
+  if self._info_open and self._info_auto then
+    if self.ui then
+      self.ui:close_info()
+    end
+    self._info_open = false
+    self._info_auto = false
   end
 end
 
@@ -321,7 +414,11 @@ function Session:_info_lines()
   if self._exit_code ~= nil then
     status = "exited (" .. tostring(self._exit_code) .. ")"
   elseif self._busy then
-    status = "running…"
+    local now = vim.uv.now()
+    local frames = { "⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏" }
+    local spin = frames[math.floor(now / 100) % #frames + 1]
+    local secs = math.floor((now - (self._busy_since or now)) / 1000)
+    status = string.format("%s running %02d:%02d", spin, math.floor(secs / 60), secs % 60)
   else
     status = "ready"
   end
@@ -338,15 +435,33 @@ function Session:_info_lines()
     ctx = "—"
   end
   local cost = s.cost ~= nil and string.format("$%.4f", s.cost) or "—"
-  return {
+  local lines = {
     "  pi-chat  ",
     "",
     "  status   " .. status,
+  }
+  if self._busy and self._exit_code == nil then
+    local phase = ({
+      waiting = "waiting for model…",
+      thinking = "thinking…",
+      tool = "running tool" .. (self._tool_name and (": " .. self._tool_name) or "…"),
+      answering = "writing answer…",
+    })[self._phase or "waiting"]
+    local idle = math.floor((vim.uv.now() - (self._last_event_at or vim.uv.now())) / 1000)
+    local live = idle < 1 and "just now" or (idle .. "s ago")
+    if idle >= 30 then
+      live = live .. "  ⚠ no response"
+    end
+    lines[#lines + 1] = "  doing    " .. phase
+    lines[#lines + 1] = "  last pi  " .. live
+  end
+  vim.list_extend(lines, {
     "  session  " .. (self._session_name or "new session"),
     "  model    " .. model,
     "  context  " .. ctx,
     "  cost     " .. cost,
-  }
+  })
+  return lines
 end
 
 --- Toggle the floating info popup (status / session / model / context / cost).
@@ -354,12 +469,15 @@ function Session:toggle_info()
   if not (self.ui and self.ui:is_valid()) then
     return
   end
+  self._info_auto = false -- a manual toggle takes ownership of the popup
   if self._info_open then
     self.ui:close_info()
     self._info_open = false
+    self._info_user_closed = true -- don't re-open it again during this run
     return
   end
   self._info_open = true
+  self._info_user_closed = false
   self.ui:open_info(self:_info_lines())
   -- Refresh stats so the popup reflects the latest numbers.
   self:_refresh_stats()
@@ -446,8 +564,13 @@ function Session:submit(text)
   if self._busy then
     self.rpc:steer(text, images)
   else
+    -- Show "running" at once instead of waiting for pi's turn_start event.
+    self._info_user_closed = false
+    self:_set_busy(true)
+    self:_auto_open_info()
     self.rpc:prompt(text, images, function(resp)
       if resp and resp.success == false then
+        self:_set_busy(false)
         vim.notify("pi-chat: prompt rejected: " .. tostring(resp.error), vim.log.levels.ERROR)
       end
     end)
@@ -491,6 +614,7 @@ function Session:abort()
 end
 
 function Session:close()
+  self:_stop_tick()
   if self.rpc then
     self.rpc:shutdown()
     self.rpc = nil

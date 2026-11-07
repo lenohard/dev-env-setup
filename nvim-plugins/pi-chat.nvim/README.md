@@ -17,7 +17,11 @@ to pi directly instead of going through the Agent Client Protocol.
   placeholder line, not as virtual lines, not as folds. The transcript is
   exactly the prompts plus the answers, so nothing can disturb the markdown
   parse (bold, tables and code fences always render). A `● running…` label in
-  the input pane's divider shows that pi is still working.
+  the input pane's divider shows that pi is still working. After you send a
+  message a floating status popup opens automatically (spinner, elapsed time,
+  what pi is doing, seconds since its last event, `⚠ no response` after 30s)
+  and closes as soon as answer text starts streaming; it re-opens if no text
+  arrives for 1.5s (e.g. during a tool run). `<leader>pi` toggles it manually.
 - **Markdown rendering**: the conversation buffer uses the `pichat` filetype,
   which the plugin maps onto the `markdown` treesitter parser and starts the
   markdown highlighter on (`render-markdown.nvim` is driven by it).
