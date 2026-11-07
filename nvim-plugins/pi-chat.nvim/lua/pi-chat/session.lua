@@ -3,17 +3,20 @@
 -- Owns one chat: an RPC connection + a UI + the translation from pi session
 -- events into conversation-buffer operations.
 --
--- Event handling (the five that matter for the agreed scope):
---   message_update(text_delta)  -> stream assistant text
---   message_start/end (user)    -> insert "## You" heading + text
---   message_start (assistant)   -> insert "## pi" heading, begin streaming
---   tool_execution_start        -> insert collapsed "## 🔧 tool" fold header
---   tool_execution_end          -> fill the fold with the full result
---   agent_settled               -> mark ready
---   extension_ui_request        -> delegate to approve.lua
+-- Event handling (the ones that matter for the agreed scope):
+--   message_update(text_delta)     -> stream the assistant answer text
+--   message_update(thinking_delta) -> DROPPED (reasoning is never shown)
+--   message_start/end (user)       -> insert "▌ You" separator + text
+--   message_start (assistant)      -> insert "▌ pi" separator, begin streaming
+--   tool_execution_*               -> never rendered, only a paragraph boundary
+--   agent_settled                  -> mark ready
+--   extension_ui_request           -> delegate to approve.lua
 --
--- Tool blocks are wrapped in Vim fold markers ({{{N / }}}) so they collapse by
--- default (foldlevel=0).
+-- The transcript is user prompts plus assistant answer text and nothing else:
+-- no thinking, no tool calls, no placeholder lines, no virtual lines, no folds.
+-- Keeping everything else out of the buffer means nothing can disturb the
+-- markdown parse (a table, an inline fence or tool output containing `{{{`
+-- never reaches the buffer at all), so the answer always renders.
 
 local rpc_mod = require("pi-chat.rpc")
 local ui_mod = require("pi-chat.ui")
@@ -32,7 +35,6 @@ function M.new(config)
     ui = nil,
     _assistant_streaming = false, -- currently appending assistant deltas
     _last_role = nil,
-    _tools = {}, -- toolCallId -> { header_line = int }
     _busy = false,
     _model = nil, -- { provider, id, name }
     _session_name = nil,
@@ -45,67 +47,12 @@ function M.new(config)
   }, Session)
 end
 
-local function tool_summary(name, args)
-  args = args or {}
-  if name == "bash" and args.command then
-    return "bash: " .. args.command
-  end
-  if name == "read" and (args.path or args.file_path) then
-    return "read: " .. (args.path or args.file_path)
-  end
-  if (name == "edit" or name == "write") and (args.path or args.file_path) then
-    return name .. ": " .. (args.path or args.file_path)
-  end
-  if name == "grep" and args.pattern then
-    return "grep: " .. args.pattern
-  end
-  -- Fallback: show the first short-ish string arg.
-  for _, key in ipairs({ "query", "command", "path", "pattern", "message" }) do
-    if type(args[key]) == "string" then
-      return name .. ": " .. args[key]
-    end
-  end
-  return name
-end
-
 -- Role separators use a leading bar glyph + em-dash rule instead of a markdown
 -- heading, so render-markdown does not paint the whole line as a big heading.
 -- Highlighting (bar color + dim rule) is applied with extmarks in ui:append.
 local ROLE_PREFIX = "▌ "
 local function role_line(label)
   return ROLE_PREFIX .. label
-end
-
-local function result_to_lines(result)
-  local out = {}
-  local content = result and result.content
-  if type(content) == "table" then
-    for _, part in ipairs(content) do
-      if type(part) == "table" and part.type == "text" and part.text then
-        for _, l in ipairs(vim.split(part.text, "\n", { plain = true })) do
-          out[#out + 1] = l
-        end
-      elseif type(part) == "table" and part.type == "image" and part.data then
-        -- Save image parts to a temp file; show a path + open hint instead of
-        -- rendering inline (no terminal graphics / tmux pitfalls).
-        local imgs = require("pi-chat.images")
-        local p = imgs.save_result_image(part.data, part.mimeType)
-        if p then
-          out[#out + 1] = "🖼 image → " .. p .. "  (cursor here + <leader>po to open)"
-        else
-          out[#out + 1] = "🖼 (image: could not save)"
-        end
-      end
-    end
-  end
-  if #out == 0 then
-    out = { "(no text output)" }
-  end
-  -- Trim trailing blank lines (tool output often ends with a newline).
-  while #out > 1 and out[#out]:match("^%s*$") do
-    out[#out] = nil
-  end
-  return out
 end
 
 function Session:open()
@@ -169,6 +116,18 @@ function Session:_refresh_state(is_initial)
   end)
 end
 
+--- Build the fresh-session intro lines: just the title and the current model.
+--- @param model table|nil { provider, id, name }
+function M.intro_lines(model)
+  local lines = { "# pi-chat", "" }
+  local label = model and (model.name or model.provider .. "/" .. model.id)
+  if label and label ~= "" then
+    lines[#lines + 1] = "model: `" .. label .. "`"
+  end
+  lines[#lines + 1] = ""
+  return lines
+end
+
 --- Render the fresh-session intro (used on first ready + after new_session).
 function Session:_render_intro()
   if not (self.ui and self.ui:is_valid()) then
@@ -176,16 +135,7 @@ function Session:_render_intro()
   end
   self.ui:clear()
   self._intro_cleared = false
-  local name = self._session_name or "new session"
-  self.ui:append({
-    "# pi-chat",
-    "",
-    "_ready — " .. name .. "_",
-    "",
-    "Type below and press `<CR>` to ask. `<Tab>` switches panes,",
-    "`za` toggles a tool block, `]]`/`[[` jump between messages.",
-    "",
-  })
+  self.ui:append(M.intro_lines(self._model))
 end
 
 function Session:_connect()
@@ -249,11 +199,12 @@ function Session:_on_record(rec)
 
   if t == "message_update" then
     local ev = rec.assistantMessageEvent
+    -- Only assistant answer text reaches the buffer. thinking_delta (and every
+    -- other delta type) is dropped here, before it can touch the markdown.
     if ev and ev.type == "text_delta" and ev.delta then
       self:_ensure_assistant()
       self.ui:append_stream(ev.delta)
     end
-    -- thinking_delta intentionally ignored (keep the transcript clean)
     return
   end
 
@@ -263,18 +214,16 @@ function Session:_on_record(rec)
     -- User prompts are echoed locally in submit(); pi's own user message_end
     -- would duplicate them, so we ignore it here.
     if role == "assistant" then
-      self._assistant_streaming = false
+      self:_end_segment()
     end
     return
   end
 
-  if t == "tool_execution_start" then
-    self:_tool_start(rec)
-    return
-  end
-
-  if t == "tool_execution_end" then
-    self:_tool_end(rec)
+  -- Tool calls are never rendered. A tool run still means the answer is split
+  -- into separate paragraphs (text -> tool -> more text), so end the current
+  -- text segment and let the next delta open a fresh one.
+  if t == "tool_execution_start" or t == "tool_execution_end" then
+    self:_end_segment()
     return
   end
 
@@ -308,6 +257,9 @@ end
 
 function Session:_set_busy(busy)
   self._busy = busy
+  if self.ui and self.ui.set_busy then
+    self.ui:set_busy(busy)
+  end
   if self._info_open then
     self:refresh_info()
   end
@@ -427,14 +379,17 @@ function Session:_begin_assistant()
   if not self._assistant_shown then
     self.ui:append_role(role_line("pi"))
     self._assistant_shown = true
-    self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+    -- The role line sits 2 lines above the end (blank / role / rule / blank).
+    self._final_pi_line = math.max(1, vim.api.nvim_buf_line_count(self.ui.conv_buf) - 2)
   else
-    -- A new assistant text segment after a tool block. _tool_end already left
-    -- exactly one blank line after the fold's }}} marker, so just open a fresh
-    -- line to stream into (no extra blanks, or they pile up).
-    self.ui:append({ "" })
-    -- Point "jump to final output" at the start of this latest text segment.
-    self._final_pi_line = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+    -- A later text segment of the same turn (after a tool call). Keep exactly
+    -- one blank line between segments, no matter how many empty assistant
+    -- messages (thinking-only) arrived in between.
+    local n = vim.api.nvim_buf_line_count(self.ui.conv_buf)
+    local last = vim.api.nvim_buf_get_lines(self.ui.conv_buf, n - 1, n, false)[1] or ""
+    if last ~= "" then
+      self.ui:append({ "", "" })
+    end
   end
   self._last_role = "assistant"
   self._assistant_streaming = true
@@ -442,60 +397,19 @@ end
 
 function Session:_ensure_assistant()
   -- Open a new assistant segment whenever we are not already streaming one
-  -- (e.g. right after a tool block, which sets _assistant_streaming=false).
+  -- (e.g. after a tool boundary).
   if not self._assistant_streaming or self._last_role ~= "assistant" then
     self:_begin_assistant()
   end
 end
 
-function Session:_tool_start(rec)
-  local summary = tool_summary(rec.toolName, rec.args)
-  -- Compact tool header: a light indented marker (NOT the ▌ role bar) so it
-  -- reads as part of pi's turn, not a new speaker. Fold marker collapses it.
-  local header = "   ⚙ " .. summary
-  self.ui:append({ header .. " {{{1", "    ··· running" })
-  local line_count = vim.api.nvim_buf_line_count(self.ui.conv_buf)
-  self._tools[rec.toolCallId] = {
-    body_start = line_count, -- 1-based line of the "_running…_" placeholder
-  }
-  self._last_role = "tool"
-end
-
-function Session:_tool_end(rec)
-  local entry = self._tools[rec.toolCallId]
-  local lines = result_to_lines(rec.result)
-  local status = rec.isError and "✗ error" or "✓ done"
-  local dur = rec.durationMs and (" · " .. rec.durationMs .. "ms") or ""
-
-  -- Render the tool output as indented plain lines, NOT a ``` fenced block.
-  -- Fenced blocks inside the fold collide with the conversation's own markdown
-  -- (render-markdown mis-parses), and tool output may itself contain ```.
-  -- Indentation keeps it visually distinct and markdown-inert.
-  local body = { "    " .. status .. dur }
-  for _, l in ipairs(lines) do
-    body[#body + 1] = "    │ " .. l
-  end
-  -- Close the fold, then a blank line so following assistant text / markdown
-  -- never abuts the }}} marker.
-  body[#body + 1] = "}}}"
-  body[#body + 1] = ""
-
-  if entry and entry.body_start then
-    -- Replace the "_running…_" placeholder line with the real body.
-    local buf = self.ui.conv_buf
-    local idx = entry.body_start - 1 -- to 0-based
-    vim.bo[buf].modifiable = true
-    vim.api.nvim_buf_set_lines(buf, idx, idx + 1, false, body)
-    vim.bo[buf].modifiable = false
-    self.ui:scroll_to_end()
-  else
-    self.ui:append(body)
-  end
-  self._tools[rec.toolCallId] = nil
-  -- A tool block ended; the next assistant delta must start on a fresh line,
-  -- not glued to the fold. Force _ensure_assistant to open a new line.
-  self._last_role = "tool"
+--- End the current assistant text segment (message end / tool boundary).
+--- Adds nothing to the buffer: the separator is emitted lazily by
+--- _begin_assistant only when the next segment has text, so a turn full of
+--- thinking-only messages cannot leave a pile of blank lines behind.
+function Session:_end_segment()
   self._assistant_streaming = false
+  self._last_role = "segment_end"
 end
 
 function Session:submit(text)
@@ -636,7 +550,6 @@ function Session:_reset_conv_state()
   self._assistant_streaming = false
   self._assistant_shown = false
   self._final_pi_line = nil
-  self._tools = {}
 end
 
 --- Start a fresh session (discard the current conversation). pi keeps the old
@@ -700,8 +613,9 @@ function Session:_rebuild_from_history(attempt)
     self._intro_cleared = true
     self._last_role = nil
     self._assistant_streaming = false
+    local prev_role = nil
     for _, msg in ipairs(msgs) do
-      self:_render_history_message(msg)
+      prev_role = self:_render_history_message(msg, prev_role)
     end
     if renderable == 0 then
       self.ui:append({ "_(empty session)_" })
@@ -710,8 +624,12 @@ function Session:_rebuild_from_history(attempt)
   end)
 end
 
---- Render one persisted message (user/assistant/tool) during history rebuild.
-function Session:_render_history_message(msg)
+--- Render one persisted message (user/assistant) during history rebuild.
+--- Consecutive assistant messages of one turn (pi splits them at tool calls)
+--- share ONE "▌ pi" header; tool calls and thinking are not rendered at all.
+--- @param prev_role string|nil  role rendered before this message
+--- @return string|nil  role rendered for this message
+function Session:_render_history_message(msg, prev_role)
   local role = msg.role
   local function text_of(content)
     if type(content) == "string" then
@@ -730,34 +648,30 @@ function Session:_render_history_message(msg)
 
   if role == "user" then
     local t = text_of(msg.content)
-    if t ~= "" then
-      self.ui:append_role(role_line("You"))
-      self.ui:append(vim.split(t, "\n", { plain = true }))
+    if t == "" then
+      return prev_role
     end
-  elseif role == "assistant" then
-    -- Assistant content may interleave text parts and tool calls.
-    local content = msg.content
-    if type(content) == "table" then
-      local text_parts = {}
-      for _, part in ipairs(content) do
-        if type(part) == "table" then
-          if part.type == "text" and part.text then
-            text_parts[#text_parts + 1] = part.text
-          elseif part.type == "toolCall" or part.type == "tool_call" then
-            local name = part.name or part.toolName or "tool"
-            local args = part.args or part.input or {}
-            local summary = tool_summary(name, args)
-            self.ui:append({ "", role_line("🔧 " .. summary) .. " {{{1", "  _(from history)_", "}}}" })
-          end
-        end
-      end
-      local joined = table.concat(text_parts, "")
-      if joined ~= "" then
-        self.ui:append_role(role_line("pi"))
-        self.ui:append(vim.split(joined, "\n", { plain = true }))
-      end
-    end
+    self.ui:append_role(role_line("You"))
+    self.ui:append(vim.split(t, "\n", { plain = true }))
+    return "user"
   end
+
+  if role ~= "assistant" then
+    return prev_role
+  end
+
+  local t = text_of(msg.content)
+  if t == "" then
+    return prev_role
+  end
+  if prev_role == "assistant" then
+    -- Same turn, already under a "▌ pi" header: just a paragraph break.
+    self.ui:append({ "" })
+  else
+    self.ui:append_role(role_line("pi"))
+  end
+  self.ui:append(vim.split(t, "\n", { plain = true }))
+  return "assistant"
 end
 
 return M

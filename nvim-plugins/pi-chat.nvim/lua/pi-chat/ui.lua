@@ -1,13 +1,18 @@
 -- pi-chat.nvim :: UI layer
 --
 -- Right-side vertical split:
---   top    = conversation buffer (markdown, read-only, folded tool blocks)
+--   top    = conversation buffer (markdown, read-only)
 --   bottom = input buffer (type here, <CR>/<C-s> to send)
 --
--- The conversation buffer is plain markdown text. Structure comes from
--- `## ` headings (one per message / tool block) so `]]`/`[[` and
--- render-markdown.nvim work natively. Tool blocks are wrapped in fold markers
--- ({{{ / }}}) so they collapse by default.
+-- The conversation buffer holds ONLY real markdown lines: role separators,
+-- the user's prompt, and the assistant's answer text. Thinking and tool calls
+-- are dropped entirely -- never buffered, never rendered: no placeholder line,
+-- no virtual lines, no folds. Nothing therefore can disturb the markdown parse,
+-- so bold / tables / code fences in the answer always render.
+--
+-- The buffer's filetype is `pichat`, which has no treesitter parser of its own.
+-- M.open() registers markdown as its language and starts the markdown
+-- highlighter; without that render-markdown renders nothing at all.
 
 local M = {}
 
@@ -45,6 +50,17 @@ local function ensure_highlights()
   -- Info popup: reuse the float groups so it matches the theme.
   vim.api.nvim_set_hl(0, "PiChatInfo", { link = "NormalFloat", default = true })
   vim.api.nvim_set_hl(0, "PiChatInfoBorder", { link = "FloatBorder", default = true })
+
+  -- Input winbar: an always-visible divider between the conversation and the
+  -- input pane. Use an accent color so it clearly separates the two, and give
+  -- it the input pane's tinted background so the bar blends into the input.
+  local inbg = vim.api.nvim_get_hl(0, { name = "PiChatInputBg" })
+  vim.api.nvim_set_hl(0, "PiChatDivider", {
+    fg = (vim.api.nvim_get_hl(0, { name = "Title" }) or {}).fg,
+    bg = inbg and inbg.bg or nil,
+    bold = true,
+    default = true,
+  })
 end
 
 --- @class PiChatUI
@@ -92,6 +108,11 @@ function M.open(opts)
 
   local width = opts.width or math.max(60, math.floor(vim.o.columns * 0.4))
 
+  -- `pichat` has no treesitter parser of its own; map it onto the markdown
+  -- parser so treesitter (and render-markdown, which is driven by it) works.
+  -- Without this the buffer parses as nothing and renders as raw text.
+  pcall(vim.treesitter.language.register, "markdown", "pichat")
+
   -- Conversation buffer (scratch). Uses a dedicated `pichat` filetype so the
   -- render-markdown override applies only here, never to real markdown files.
   self.conv_buf = vim.api.nvim_create_buf(false, true)
@@ -101,6 +122,9 @@ function M.open(opts)
   vim.bo[self.conv_buf].filetype = "pichat"
   vim.bo[self.conv_buf].modifiable = false
   vim.api.nvim_buf_set_name(self.conv_buf, "pi-chat")
+  -- render-markdown conceals inline markup (bold/italic/inline code/links) via
+  -- the treesitter highlighter, so it has to be running on this buffer.
+  pcall(vim.treesitter.start, self.conv_buf, "markdown")
 
   -- Input buffer (scratch). Plain filetype — no markdown rendering while typing.
   self.input_buf = vim.api.nvim_create_buf(false, true)
@@ -140,8 +164,15 @@ function M.open(opts)
   vim.wo[self.input_win].winfixheight = true
   -- Distinct background so the input pane is easy to tell apart from the
   -- conversation. winhighlight remaps Normal only in this window.
-  vim.wo[self.input_win].winhighlight = "Normal:PiChatInputBg,EndOfBuffer:PiChatInputBg"
-  vim.api.nvim_win_set_height(self.input_win, 2)
+  vim.wo[self.input_win].winhighlight =
+    "Normal:PiChatInputBg,EndOfBuffer:PiChatInputBg,WinBar:PiChatDivider,WinBarNC:PiChatDivider"
+  -- An always-visible divider between the conversation (above) and the input
+  -- (below): a full-width horizontal rule with a small label. The winbar sits
+  -- at the top of the input window and cannot be scrolled away. The label also
+  -- carries the "is pi still working" state, because thinking and tool calls
+  -- are no longer shown anywhere in the conversation.
+  self:_update_winbar()
+  vim.api.nvim_win_set_height(self.input_win, 6)
   self:_setup_input_autogrow()
 
   self:_set_keymaps()
@@ -159,9 +190,28 @@ function M.open(opts)
   return self
 end
 
---- Auto-resize the input window between 2 and 4 lines as content changes.
+--- Winbar text: the divider rule plus the current agent state.
+function UI:_update_winbar()
+  if not (self.input_win and vim.api.nvim_win_is_valid(self.input_win)) then
+    return
+  end
+  local label = self._busy and "\u{25cf} running\u{2026}" or "prompt"
+  vim.wo[self.input_win].winbar = "%#PiChatDivider#"
+    .. "\u{2500}\u{2500} "
+    .. label
+    .. " "
+    .. string.rep("\u{2500}", 200)
+end
+
+--- Reflect the agent's busy state in the input winbar.
+function UI:set_busy(busy)
+  self._busy = busy and true or false
+  self:_update_winbar()
+end
+
+--- Auto-resize the input window between 6 and 10 lines as content changes.
 function UI:_setup_input_autogrow()
-  local MIN, MAX = 2, 4
+  local MIN, MAX = 6, 10
   local function resize()
     if not (self.input_win and vim.api.nvim_win_is_valid(self.input_win)) then
       return
@@ -183,15 +233,23 @@ function UI:_set_conv_win_opts()
   vim.wo[w].relativenumber = false
   vim.wo[w].wrap = true
   vim.wo[w].linebreak = true
-  vim.wo[w].foldmethod = "marker"
-  vim.wo[w].foldlevel = 0 -- tool blocks start collapsed
-  vim.wo[w].foldcolumn = "0" -- no fold gutter; use za/zR/zM instead
+  -- Nothing in the conversation buffer is collapsible any more (thinking and
+  -- tool calls are not rendered at all), so folding stays off. Leaving
+  -- foldmethod at its default (manual) keeps render-markdown's parse clean.
+  vim.wo[w].foldmethod = "manual"
+  vim.wo[w].foldenable = false
+  vim.wo[w].foldcolumn = "0"
   vim.wo[w].signcolumn = "no"
 end
 
 function UI:_set_keymaps()
-  local function map(buf, mode, lhs, fn)
-    vim.keymap.set(mode, lhs, fn, { buffer = buf, nowait = true, silent = true })
+  local function map(buf, mode, lhs, fn, desc)
+    vim.keymap.set(mode, lhs, fn, {
+      buffer = buf,
+      nowait = true,
+      silent = true,
+      desc = desc and ("pi-chat: " .. desc) or nil,
+    })
   end
 
   -- Input: submit.
@@ -206,9 +264,9 @@ function UI:_set_keymaps()
       self.on_submit(text)
     end
   end
-  map(self.input_buf, "n", "<CR>", submit)
-  map(self.input_buf, "i", "<C-s>", submit)
-  map(self.input_buf, "n", "<C-s>", submit)
+  map(self.input_buf, "n", "<CR>", submit, "send prompt")
+  map(self.input_buf, "i", "<C-s>", submit, "send prompt")
+  map(self.input_buf, "n", "<C-s>", submit, "send prompt")
 
   -- Abort / quit, bound in both buffers.
   for _, buf in ipairs({ self.conv_buf, self.input_buf }) do
@@ -216,26 +274,26 @@ function UI:_set_keymaps()
       if self.on_abort then
         self.on_abort()
       end
-    end)
+    end, "abort turn")
     map(buf, "n", "q", function()
       if self.on_quit then
         self.on_quit()
       end
-    end)
+    end, "close chat")
     -- Toggle focus between input and conversation, in both normal and insert
     -- mode (the input buffer is usually in insert mode while typing).
     map(buf, { "n", "i" }, "<Tab>", function()
       self:toggle_focus()
-    end)
+    end, "toggle input/conversation focus")
   end
 
-  -- Conversation: jump between role separators (▌ You / ▌ pi / ▌ 🔧).
+  -- Conversation: jump between role separators (▌ You / ▌ pi).
   map(self.conv_buf, "n", "]]", function()
     vim.fn.search("^\u{258c} ", "W")
-  end)
+  end, "next message")
   map(self.conv_buf, "n", "[[", function()
     vim.fn.search("^\u{258c} ", "bW")
-  end)
+  end, "previous message")
 
   -- Model / session pickers, bound in both buffers for convenience.
   local leader = vim.g.mapleader or "\\"
@@ -244,22 +302,22 @@ function UI:_set_keymaps()
       if self.on_pick_model then
         self.on_pick_model()
       end
-    end)
+    end, "pick model")
     map(buf, { "n", "i" }, "<leader>ps", function()
       if self.on_pick_session then
         self.on_pick_session()
       end
-    end)
+    end, "pick session")
     map(buf, { "n", "i" }, "<leader>pn", function()
       if self.on_new_session then
         self.on_new_session()
       end
-    end)
+    end, "new session")
     map(buf, { "n", "i" }, "<leader>pi", function()
       if self.on_toggle_info then
         self.on_toggle_info()
       end
-    end)
+    end, "toggle info popup")
   end
 
   -- Input: attach a clipboard image (queued for the next submit).
@@ -267,19 +325,19 @@ function UI:_set_keymaps()
     if self.on_paste_image then
       self.on_paste_image()
     end
-  end)
+  end, "paste clipboard image")
   map(self.input_buf, { "n", "i" }, "<leader>pp", function()
     if self.on_paste_image then
       self.on_paste_image()
     end
-  end)
+  end, "paste clipboard image")
 
   -- Conversation: open the image on the current line with the system viewer.
   map(self.conv_buf, "n", "<leader>po", function()
     if self.on_open_image then
       self.on_open_image()
     end
-  end)
+  end, "open image under cursor")
 end
 
 function UI:is_valid()

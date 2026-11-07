@@ -2,9 +2,9 @@
 
 A thin Neovim client for the [pi coding agent](https://github.com/earendil-works/pi)
 (`@earendil-works/pi-coding-agent`) over its **RPC mode**. It turns Neovim into a
-front-end for pi: ask questions, watch streamed output, collapse tool calls,
-jump between messages, and answer approval prompts — all with native editor
-keys and markdown rendering.
+front-end for pi: ask questions, watch the streamed answer, jump between
+messages, and answer approval prompts — all with native editor keys and
+markdown rendering.
 
 Not an ACP client. pi speaks its own JSONL RPC (`pi --mode rpc`), so this talks
 to pi directly instead of going through the Agent Client Protocol.
@@ -13,10 +13,16 @@ to pi directly instead of going through the Agent Client Protocol.
 
 - **Right-side split**: conversation (top) + input (bottom).
 - **Streaming**: assistant text appears token-by-token.
-- **Collapsible tool blocks**: each tool call shows a one-line summary
-  (`🔧 bash: ls -la`), folded by default; `za` to expand the full output.
-- **Heading navigation**: `]]` / `[[` jump between `## You` / `## pi` / tool
-  headings; works with telescope/imenu too.
+- **Answer only**: thinking and tool calls are never rendered — not as a
+  placeholder line, not as virtual lines, not as folds. The transcript is
+  exactly the prompts plus the answers, so nothing can disturb the markdown
+  parse (bold, tables and code fences always render). A `● running…` label in
+  the input pane's divider shows that pi is still working.
+- **Markdown rendering**: the conversation buffer uses the `pichat` filetype,
+  which the plugin maps onto the `markdown` treesitter parser and starts the
+  markdown highlighter on (`render-markdown.nvim` is driven by it).
+- **Message navigation**: `]]` / `[[` jump between `▌ You` / `▌ pi`
+  separators.
 - **Native approvals**: pi's `extension_ui_request` dialogs (ask tool, git
   safety review, sudo password) render as `vim.ui.select` / `vim.ui.input`.
   Password prompts use `inputsecret()` — never echoed, never written to a
@@ -82,7 +88,6 @@ to pi directly instead of going through the Agent Client Protocol.
 | `<C-v>` / `<leader>pp` | input | Paste a clipboard image (attached to next send) |
 | `<leader>po` | conversation | Open the image on the current line |
 | `]]` / `[[` | conversation | Jump to next / previous message |
-| `za` / `zM` / `zR` | conversation | Toggle / close-all / open-all folds |
 
 The input pane has a slightly tinted background so it's easy to tell apart
 from the conversation. Session status / model / context% / cost live in the
@@ -91,6 +96,7 @@ info popup (`<leader>pi`), not in a persistent bar.
 ## Scope / limitations
 
 - One active chat at a time.
-- Diff preview for edit/write tools is not rendered; the raw tool result is
-  shown in the collapsed block.
+- Tool calls and thinking are not shown at all (by design): the conversation
+  only contains prompts and answers. Use pi's own session log for a full
+  record of what the agent ran.
 - `editor` dialogs open a floating scratch buffer (`<C-s>` or `:w` to submit).
