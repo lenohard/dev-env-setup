@@ -23,6 +23,10 @@ M.config = {
   model = nil, -- model for the one-shot run (nil = the chat session's model)
   provider = nil,
   extra_args = nil,
+  -- Tools for the one-shot run: a list enables exactly those tools, "*" (or
+  -- true) enables all of them, false / nil disables them. Read-only by
+  -- default: the model may look at the project, but it cannot change it.
+  tools = { "read", "grep", "find", "ls" },
   timeout_ms = 120000,
   max_context_bytes = 60000, -- above this only a window around the cursor is sent
   window_lines = 200, -- window size on each side of the cursor
@@ -189,6 +193,19 @@ local RULES = table.concat({
   "4. Keep the file's language, style and absolute indentation exactly.",
 }, "\n")
 
+--- The rules plus an optional hint about the available tools.
+--- @return string
+local function rules_with_tools()
+  local tools = M.config.tools
+  if tools == false or tools == nil then
+    return RULES
+  end
+  return RULES
+    .. "\n"
+    .. "5. You may use the available tools to read files from the project when you need more context, "
+    .. "but you must never modify anything and must still answer with a single block."
+end
+
 --- Build the prompt for one of the two modes.
 --- @param mode string  "continue" | "ask"
 --- @param question string|nil
@@ -197,7 +214,7 @@ local RULES = table.concat({
 local function build_prompt(mode, question, ctx)
   local meta = ctx.meta
   local parts = {
-    RULES,
+    rules_with_tools(),
     "",
     "---",
     "file: " .. (meta.path ~= "" and meta.path or "(unnamed buffer)"),
@@ -248,11 +265,16 @@ local function run_model(prompt, cb)
   local cmd = {
     cfg.pi_bin or "pi",
     "-p",
-    "--no-tools",
     "--no-extensions",
     "--no-skills",
     "--no-session",
   }
+  local tools = M.config.tools
+  if tools == false or tools == nil then
+    vim.list_extend(cmd, { "--no-tools" })
+  elseif tools ~= "*" and tools ~= true then
+    vim.list_extend(cmd, { "--tools", table.concat(tools, ",") })
+  end
   local model = M.config.model or cfg.model
   local provider = M.config.provider or cfg.provider
   if model then

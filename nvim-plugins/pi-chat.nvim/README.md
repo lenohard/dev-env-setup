@@ -78,6 +78,7 @@ to pi directly instead of going through the Agent Client Protocol.
     -- width = 80,           -- conversation split width (default ~40% cols)
     -- edit = {              -- inline editing (see below)
     --   model = "...",      -- model for the one-shot run (default: chat model)
+    --   tools = { "read", "grep", "find", "ls" }, -- false = none, "*" = all
     --   comment_answers = true,
     -- },
   },
@@ -114,9 +115,12 @@ Both modes work the same way:
 1. Collect the whole buffer, mark the cursor with `<<<PI_CURSOR>>>`, and add
    metadata (path, filetype, cursor line). Files above `edit.max_context_bytes`
    are trimmed to a window around the cursor.
-2. Run a **separate** `pi -p --no-tools --no-extensions --no-skills
-   --no-session` process (the prompt goes in through stdin), so the run has no
-   tools, touches no project file and never enters the chat transcript.
+2. Run a **separate** `pi -p --no-extensions --no-skills --no-session` process
+   (the prompt goes in through stdin), so the run never enters the chat
+   transcript. By default it gets the **read-only** tools
+   (`--tools read,grep,find,ls`): the model can look at the project for
+   context, but it cannot modify anything. Set `edit.tools = false` to take
+   even those away, or `edit.tools = "*"` to give it everything.
 3. Parse `<<<PI_EDIT>>> … <<<PI_END>>>`. If the markers are missing, nothing is
    inserted (an error is shown instead) — the model's chatter never reaches the
    file.
@@ -146,6 +150,7 @@ Options (`opts.edit`):
 | Option | Default | Meaning |
 |---|---|---|
 | `model` / `provider` | the chat session's model | model for the one-shot run |
+| `tools` | `{ "read", "grep", "find", "ls" }` | tools for the one-shot run; `false` = none, `"*"` = all |
 | `timeout_ms` | 120000 | kill the run after this long |
 | `max_context_bytes` | 60000 | above this only a window around the cursor is sent |
 | `window_lines` | 200 | window size on each side of the cursor |
