@@ -23,6 +23,7 @@ local active = nil
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
+  require("pi-chat.edit").setup((opts or {}).edit)
 end
 
 --- Internal accessor for the active session (used by tests and advanced use).
@@ -48,6 +49,63 @@ function M.ask(text)
       active:submit(text)
     end)
   end
+end
+
+--- Text of the current visual selection (or the last one), or nil.
+--- '[' / ']' are used because they are updated live while in visual mode.
+function M.selected_text()
+  local s = vim.fn.getpos("'[")
+  local e = vim.fn.getpos("']")
+  if s[2] == 0 or e[2] == 0 or e[2] < s[2] then
+    return nil
+  end
+  local lines = vim.api.nvim_buf_get_lines(0, s[2] - 1, e[2], false)
+  if #lines == 0 then
+    return nil
+  end
+  local first, last = lines[1], lines[#lines]
+  if #lines == 1 then
+    if e[3] > #first then
+      e[3] = #first
+    end
+    return first:sub(s[3], e[3])
+  end
+  first = first:sub(s[3])
+  if e[3] > #last then
+    e[3] = #last
+  end
+  last = last:sub(1, e[3])
+  local out = { first }
+  for i = 2, #lines - 1 do
+    out[#out + 1] = lines[i]
+  end
+  out[#out + 1] = last
+  return table.concat(out, "\n")
+end
+
+--- Send the current (or last) visual selection as the prompt, without asking
+--- a question first. Falls back to just opening the chat window.
+function M.ask_selected()
+  local sel = M.selected_text()
+  if not sel or sel == "" then
+    M.open()
+    return
+  end
+  -- Leave visual mode so the selection is not reselected on the next motion.
+  if vim.fn.mode():match("^[vV\22]") then
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", false)
+  end
+  M.ask(sel)
+end
+
+--- Inline edit: continue the file at the cursor.
+function M.edit_continue()
+  require("pi-chat.edit").continue()
+end
+
+--- Inline edit: ask a question about the buffer and insert the answer.
+function M.edit_ask()
+  require("pi-chat.edit").ask()
 end
 
 --- Send the current visual selection as a prompt (with a question).

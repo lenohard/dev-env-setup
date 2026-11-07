@@ -31,6 +31,14 @@ to pi directly instead of going through the Agent Client Protocol.
   safety review, sudo password) render as `vim.ui.select` / `vim.ui.input`.
   Password prompts use `inputsecret()` — never echoed, never written to a
   buffer, never logged.
+- **Inline editing (co-editing)**: `<leader>pe` sends the current buffer to a
+  one-shot `pi -p` run and inserts the model's answer straight into the buffer
+  at the cursor; `<leader>pA` asks a question about the buffer and inserts the
+  answer as a comment block. The model must answer with one
+  `<<<PI_EDIT>>> … <<<PI_END>>>` block — everything outside it is dropped, so a
+  chatty model can never dump prose into the file. The inserted range is
+  highlighted with the `PiChatEdit` (DiffAdd) highlight; no marker text is
+  written into the file.
 
 ## Requirements
 
@@ -45,10 +53,20 @@ to pi directly instead of going through the Agent Client Protocol.
 {
   dir = vim.fn.expand("~/dev-env-setup/nvim-plugins/pi-chat.nvim"),
   dependencies = { "MeanderingProgrammer/render-markdown.nvim" },
-  cmd = { "PiChat", "PiChatOpen", "PiChatAsk", "PiChatAskSelection", "PiChatNew" },
+  cmd = {
+    "PiChat", "PiChatOpen", "PiChatAsk", "PiChatAskSelection", "PiChatAskSelected",
+    "PiChatEdit", "PiChatEditAsk", "PiChatNew",
+  },
   keys = {
     { "<leader>pc", "<cmd>PiChat<cr>", desc = "pi-chat toggle" },
-    { "<leader>pa", "<cmd>PiChatAsk<cr>", desc = "pi ask" },
+    {
+      "<leader>pa",
+      "<cmd>PiChatAskSelected<cr>",
+      mode = { "n", "v" },
+      desc = "pi: send selection as prompt",
+    },
+    { "<leader>pe", "<cmd>PiChatEdit<cr>", desc = "pi: inline edit (continue at cursor)" },
+    { "<leader>pA", "<cmd>PiChatEditAsk<cr>", desc = "pi: inline edit (ask, insert answer)" },
     { "<leader>pn", "<cmd>PiChatNew<cr>", desc = "pi-chat new session" },
     { "<leader>pv", ":PiChatAskSelection<cr>", mode = "v", desc = "pi ask selection" },
   },
@@ -58,6 +76,10 @@ to pi directly instead of going through the Agent Client Protocol.
     -- provider = "...",     -- optional, passed as `--provider`
     -- no_session = false,   -- keep sessions so history persists
     -- width = 80,           -- conversation split width (default ~40% cols)
+    -- edit = {              -- inline editing (see below)
+    --   model = "...",      -- model for the one-shot run (default: chat model)
+    --   comment_answers = true,
+    -- },
   },
 }
 ```
@@ -71,11 +93,63 @@ to pi directly instead of going through the Agent Client Protocol.
 | `:PiChatClose` | Close the chat and stop the agent |
 | `:PiChatAsk [text]` | Open and send a prompt |
 | `:PiChatAskSelection` | Ask about the visual selection (with a question) |
+| `:PiChatAskSelected` | Send the visual selection to pi as the prompt (no question) |
+| `:PiChatEdit` | Inline edit: continue writing at the cursor |
+| `:PiChatEditAsk` | Inline edit: ask about the buffer, insert the answer |
 | `:PiChatNew` | Start a fresh session (discard the current conversation) |
 | `:PiChatSessions` | Pick a recent session to continue |
 | `:PiChatContinue` | Continue the most recent session |
 | `:PiChatModel` | Pick the model |
 | `:PiChatInfo` | Toggle the info popup (status / session / model / context / cost) |
+
+## Inline editing (co-editing)
+
+| Command | Key | What it does |
+|---|---|---|
+| `:PiChatEdit` | `<leader>pe` | **Continue** the file at the cursor |
+| `:PiChatEditAsk` | `<leader>pA` | **Ask** a question about the buffer; the answer is inserted |
+
+Both modes work the same way:
+
+1. Collect the whole buffer, mark the cursor with `<<<PI_CURSOR>>>`, and add
+   metadata (path, filetype, cursor line). Files above `edit.max_context_bytes`
+   are trimmed to a window around the cursor.
+2. Run a **separate** `pi -p --no-tools --no-extensions --no-skills
+   --no-session` process (the prompt goes in through stdin), so the run has no
+   tools, touches no project file and never enters the chat transcript.
+3. Parse `<<<PI_EDIT>>> … <<<PI_END>>>`. If the markers are missing, nothing is
+   inserted (an error is shown instead) — the model's chatter never reaches the
+   file.
+4. Insert the content and highlight it with `PiChatEdit` (linked to `DiffAdd`).
+   The highlight is a visual marker only: no text is added to the file, and `u`
+   undoes the insertion in one step.
+
+In **continue** mode the model outputs only the text to insert; **the plugin
+decides where it goes**:
+
+| Situation | Placement |
+|---|---|
+| the current line is blank | the text fills that line |
+| the line is unfinished (`=`, `(`, `,`, `.`, `->`, … before the cursor) | the text continues the same line |
+| anything else | the text goes on new lines under the current one |
+
+The inserted text is indented to match the cursor line: if the model dropped
+the leading indentation, the whole block is shifted by the indentation of the
+current line (closing lines such as `end` are left alone).
+
+In **ask** mode the answer is inserted below the current line, prefixed with
+the filetype's comment string (`-- `, `// `, `# ` …); markdown/text buffers get
+the plain answer.
+
+Options (`opts.edit`):
+
+| Option | Default | Meaning |
+|---|---|---|
+| `model` / `provider` | the chat session's model | model for the one-shot run |
+| `timeout_ms` | 120000 | kill the run after this long |
+| `max_context_bytes` | 60000 | above this only a window around the cursor is sent |
+| `window_lines` | 200 | window size on each side of the cursor |
+| `comment_answers` | true | prefix answers with the filetype comment string |
 
 ## Keys (inside the chat)
 

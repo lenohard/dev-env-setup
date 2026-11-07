@@ -28,6 +28,18 @@ vim.api.nvim_create_user_command("PiChatAskSelection", function()
   pi().ask_selection()
 end, { range = true, desc = "Ask pi about the visual selection" })
 
+vim.api.nvim_create_user_command("PiChatAskSelected", function()
+  pi().ask_selected()
+end, { desc = "Send the visual selection to pi as the prompt" })
+
+vim.api.nvim_create_user_command("PiChatEdit", function()
+  pi().edit_continue()
+end, { desc = "Inline edit: continue writing at the cursor" })
+
+vim.api.nvim_create_user_command("PiChatEditAsk", function()
+  pi().edit_ask()
+end, { desc = "Inline edit: ask about the buffer and insert the answer" })
+
 vim.api.nvim_create_user_command("PiChatModel", function()
   pi().pick_model()
 end, { desc = "Pick pi-chat model" })
