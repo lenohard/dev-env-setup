@@ -56,14 +56,14 @@ end
 
 --- Lines that legitimately start at column 0 even inside an indented block.
 local function is_dedent_line(line)
-  return line:match("^[ \t]*(end|else|elseif|elif|except|finally|case|default)[^%w]") ~= nil
+  return line:match("^[ \t]*(end|else|elseif|elif|except|finally|case|default)([^%w]|$)") ~= nil
     or line:match("^[ \t]*[%}%)]") ~= nil
 end
 
 --- Does this line open a block (so the next line is indented one level more)?
 local function opens_block(line)
   local t = line:gsub("%s+$", "")
-  if t:match("[%w%)%]%s*then$") or t:match("[%w%)%]%s*do$") or t:match("{$") then
+  if t:match("[%w%)]%s*then$") or t:match("[%w%)]%s*do$") or t:match("{}$") then
     return true
   end
   if t:match("function%s+[%w_]+%s*%b()") or t:match("^%s*def%s") or t:match("^%s*class%s") then
@@ -500,8 +500,16 @@ local function run(mode, question)
     return
   end
 
-  local ctx = collect_context(bufnr)
-  local prompt = build_prompt(mode, question, ctx)
+  local ok, ctx = pcall(collect_context, bufnr)
+  if not ok then
+    vim.notify("pi-chat: 收集上下文失败: " .. tostring(ctx), vim.log.levels.ERROR)
+    return
+  end
+  local ok2, prompt = pcall(build_prompt, mode, question, ctx)
+  if not ok2 then
+    vim.notify("pi-chat: 构造 prompt 失败: " .. tostring(prompt), vim.log.levels.ERROR)
+    return
+  end
   busy = true
   vim.notify("pi-chat: 正在生成…", vim.log.levels.INFO)
 
