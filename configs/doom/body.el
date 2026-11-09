@@ -59,5 +59,9 @@
   (load (expand-file-name (concat f ".el") (expand-file-name "body" body--dir))
         nil t))
 
+;; 重载（手动 M-x load-file 或 agent 改自身）后，活会话的工具换新对象
+(when (fboundp 'body--refresh-session-tools)
+  (body--refresh-session-tools))
+
 (provide 'body)
 ;;; body.el ends here
