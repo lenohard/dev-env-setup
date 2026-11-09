@@ -283,7 +283,23 @@ echo "--- Ripgrep Configuration ---"
 create_symlink "$CONFIGS_DIR/ripgreprc" "$HOME/.ripgreprc" "Ripgrep config"
 
 # ----------------------------------------
-# 7. Agent Context and Skills (external iCloud files)
+# 7. Doom Emacs Configuration (DOOMDIR)
+# ----------------------------------------
+echo ""
+echo "--- Doom Emacs Configuration ---"
+
+# Requires Doom Emacs (github.com/doomemacs/core) cloned to ~/.emacs.d; the
+# modules repo is fetched by 'doom install' into ~/.emacs.d/sources/doom+.
+create_symlink "$CONFIGS_DIR/doom" "$HOME/.doom.d" "Doom Emacs private config (DOOMDIR)"
+
+if [[ -x "$HOME/.emacs.d/bin/doom" ]]; then
+    log_info "After changing init.el/packages.el, run: ~/.emacs.d/bin/doom sync"
+else
+    log_warn "Doom Emacs not found at ~/.emacs.d; install it before starting Emacs"
+fi
+
+# ----------------------------------------
+# 8. Agent Context and Skills (external iCloud files)
 # ----------------------------------------
 echo ""
 echo "--- Agent Context and Skills ---"
@@ -301,7 +317,7 @@ else
 fi
 
 # ----------------------------------------
-# 8. Install Zinit (Zsh Plugin Manager)
+# 9. Install Zinit (Zsh Plugin Manager)
 # ----------------------------------------
 echo ""
 echo "--- Zsh Plugin Manager (Zinit) ---"
@@ -320,7 +336,7 @@ else
 fi
 
 # ----------------------------------------
-# 9. Ensure required directories exist
+# 10. Ensure required directories exist
 # ----------------------------------------
 echo ""
 echo "--- Creating Required Directories ---"
@@ -343,7 +359,7 @@ for dir in "${REQUIRED_DIRS[@]}"; do
 done
 
 # ----------------------------------------
-# 10. Post-install instructions
+# 11. Post-install instructions
 # ----------------------------------------
 echo ""
 echo "=========================================="

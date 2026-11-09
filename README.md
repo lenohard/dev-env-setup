@@ -1,6 +1,6 @@
 # Dev Environment Setup
 
-Portable development environment configuration for Zsh, Neovim, Hammerspoon, Ghostty, and Tmux.
+Portable development environment configuration for Zsh, Neovim, Doom Emacs, Hammerspoon, Ghostty, and Tmux.
 
 ## Overview
 
@@ -36,7 +36,14 @@ dev-env-setup/
 │   ├── tmux/
 │   │   ├── tmux.conf       # Main Tmux configuration
 │   │   └── tmux.conf.local # Local Tmux overrides
-│   └── ripgreprc           # Ripgrep configuration
+│   ├── ripgreprc           # Ripgrep configuration
+│   └── doom/
+│       ├── init.el         # Doom module list
+│       ├── config.el       # Private config (evil keys, gptel, theme)
+│       ├── packages.el     # Extra packages
+│       ├── custom.el       # Customize cache
+│       ├── body.el         # gptel "agent body" (in-Emacs assistant)
+│       └── body-genes.el   # Long-lived body memory
 └── docs/
     └── (documentation files)
 ```
@@ -113,6 +120,7 @@ The installer creates these symlinks:
 | `configs/ghostty/config` | `~/.config/ghostty/config` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` |
 | `configs/ripgreprc` | `~/.ripgreprc` |
+| `configs/doom/` | `~/.doom.d` (Doom Emacs DOOMDIR) |
 | `iCloud agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` |
 | `iCloud agent/skills/` | `~/.agents/skills` |
 

@@ -1,0 +1,8 @@
+# Doom runtime / editor cruft inside DOOMDIR
+.local/
+eln-cache/
+auto-save-list/
+*.bak
+*.bak-*
+*.new
+.aider*
