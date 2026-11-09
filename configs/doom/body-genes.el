@@ -308,3 +308,17 @@
 
 ;; 默认模型固定为 qwen-cn/deepseek-v4.1-flash-1017（下次启动生效）  (2026-11-09)
 (setq body-model "qwen-cn/deepseek-v4.1-flash-1017")
+
+;; 启动时不开全屏，窗口固定 165x53  (2026-11-09)
+;; 启动时保持普通窗口（不全屏），尺寸沿用上次
+(setq default-frame-alist
+      (cons '(width . 165)
+            (cons '(height . 53)
+                  (assq-delete-all 'height
+                                   (assq-delete-all 'width
+                                                    (assq-delete-all 'fullscreen default-frame-alist))))))
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (unless (daemonp)
+              (set-frame-parameter nil 'fullscreen nil)))
+          :append)
