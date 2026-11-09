@@ -603,6 +603,15 @@ if [[ $OSTYPE == darwin* ]] && (( $+commands[launchctl] )) && [[ -n ${GH_TOKEN:-
   launchctl setenv GH_TOKEN "$GH_TOKEN" 2>/dev/null
 fi
 
+# Emacs native-comp workaround (macOS): the libgccjit bundled with Emacs.app bakes
+# `-mmacosx-version-min=18.0`, which the installed clang rejects, so every on-demand
+# native compile (subr trampolines included) fails with "invalid version number".
+# An explicit target overrides the baked flag; 14.0 keeps the eln files portable.
+if [[ $OSTYPE == darwin* ]]; then
+  export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-14.0}"
+  (( $+commands[launchctl] )) && launchctl setenv MACOSX_DEPLOYMENT_TARGET "$MACOSX_DEPLOYMENT_TARGET" 2>/dev/null
+fi
+
 # Pin node to $NVM_DEFAULT (default v24.13.0) only when nvm and that version exist.
 _nvm_pin="${NVM_DEFAULT:-v24.13.0}"
 if [[ -d "${NVM_DIR:-$HOME/.nvm}/versions/node/${_nvm_pin}" ]] && _nvm_find_sh >/dev/null; then
