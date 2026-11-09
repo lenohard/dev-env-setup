@@ -36,6 +36,9 @@ dev-env-setup/
 │   ├── tmux/
 │   │   ├── tmux.conf       # Main Tmux configuration
 │   │   └── tmux.conf.local # Local Tmux overrides
+│   ├── karabiner/
+│   │   ├── rules.json      # Shared complex-modification rules
+│   │   └── apply.py        # Merges the rules into ~/.config/karabiner/karabiner.json
 │   ├── ripgreprc           # Ripgrep configuration
 │   └── doom/
 │       ├── init.el         # Doom module list
@@ -121,6 +124,12 @@ The installer creates these symlinks:
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` |
 | `configs/ripgreprc` | `~/.ripgreprc` |
 | `configs/doom/` | `~/.doom.d` (Doom Emacs DOOMDIR) |
+
+`configs/karabiner/rules.json` is not symlinked (Karabiner reads one file and
+cannot include others): `install.sh` runs `configs/karabiner/apply.py`, which
+replaces each profile's `complex_modifications.rules` while keeping machine-local
+`devices`, `simple_modifications` and `fn_function_keys` untouched. Re-run it
+after editing the rules; it is idempotent and backs up the old file.
 | `iCloud agent/AGENTS.md` | `~/.pi/agent/AGENTS.md` |
 | `iCloud agent/skills/` | `~/.agents/skills` |
 

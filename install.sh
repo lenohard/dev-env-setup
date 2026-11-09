@@ -299,7 +299,30 @@ else
 fi
 
 # ----------------------------------------
-# 8. Agent Context and Skills (external iCloud files)
+# 8. Karabiner Elements Rules (macOS only)
+# ----------------------------------------
+echo ""
+echo "--- Karabiner Elements Rules ---"
+
+# Karabiner reads a single karabiner.json and cannot include files, so the
+# shared complex-modification rules are merged in instead of symlinked
+# (machine-local devices/simple_modifications are preserved).
+if [[ "$(uname)" == "Darwin" ]] && [[ -f "$HOME/.config/karabiner/karabiner.json" ]]; then
+    if command_exists python3; then
+        if [[ "$DRY_RUN" == "true" ]]; then
+            echo "  [DRY RUN] Would run: python3 $CONFIGS_DIR/karabiner/apply.py --dry-run"
+        else
+            python3 "$CONFIGS_DIR/karabiner/apply.py" || log_warn "Karabiner rules not applied"
+        fi
+    else
+        log_warn "python3 not found; skipping Karabiner rules"
+    fi
+else
+    log_info "Karabiner Elements config not found; skipping"
+fi
+
+# ----------------------------------------
+# 9. Agent Context and Skills (external iCloud files)
 # ----------------------------------------
 echo ""
 echo "--- Agent Context and Skills ---"
@@ -317,7 +340,7 @@ else
 fi
 
 # ----------------------------------------
-# 9. Install Zinit (Zsh Plugin Manager)
+# 10. Install Zinit (Zsh Plugin Manager)
 # ----------------------------------------
 echo ""
 echo "--- Zsh Plugin Manager (Zinit) ---"
@@ -336,7 +359,7 @@ else
 fi
 
 # ----------------------------------------
-# 10. Ensure required directories exist
+# 11. Ensure required directories exist
 # ----------------------------------------
 echo ""
 echo "--- Creating Required Directories ---"
@@ -359,7 +382,7 @@ for dir in "${REQUIRED_DIRS[@]}"; do
 done
 
 # ----------------------------------------
-# 11. Post-install instructions
+# 12. Post-install instructions
 # ----------------------------------------
 echo ""
 echo "=========================================="
