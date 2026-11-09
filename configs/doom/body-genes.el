@@ -322,3 +322,24 @@
             (unless (daemonp)
               (set-frame-parameter nil 'fullscreen nil)))
           :append)
+
+;; 启动时 frame 缩到工作区 85% 并居中（配合之前的取消全屏）  (2026-11-09)
+;; 启动时把 frame 缩到工作区 85% 以内并居中（防止 165x53 撑满屏幕导致"不居中"）
+(defun body-fit-and-center-frame (&rest _)
+  "Shrink selected frame to <=85% of workarea and center it."
+  (when (display-graphic-p)
+    (let* ((frame (selected-frame))
+           (mon (frame-monitor-workarea frame))
+           (mx (nth 0 mon)) (my (nth 1 mon))
+           (mw (nth 2 mon)) (mh (nth 3 mon))
+           (mw (if (> mw 0) mw (x-display-pixel-width)))
+           (mh (if (> mh 0) mh (x-display-pixel-height)))
+           (cw (frame-char-width frame)) (ch (frame-char-height frame))
+           (cols (min 165 (max 80 (floor (* 0.85 mw) cw))))
+           (rows (min 53 (max 20 (floor (* 0.85 mh) ch)))))
+      (when (or (/= cols (frame-width frame)) (/= rows (frame-height frame)))
+        (set-frame-size frame cols rows))
+      (set-frame-position frame
+                          (+ mx (max 0 (/ (- mw (frame-pixel-width frame)) 2)))
+                          (+ my (max 0 (/ (- mh (frame-pixel-height frame)) 2)))))))
+(add-hook 'emacs-startup-hook #'body-fit-and-center-frame)

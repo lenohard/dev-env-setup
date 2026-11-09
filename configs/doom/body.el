@@ -506,6 +506,108 @@
           (push (nth 1 e) done)))
       (message "身体：已撤销 %s" (string-join (nreverse done) "；")))))
 
+
+;;;; ------------------------------------------------------------------
+;;;; 并行工具调用
+;;;; ------------------------------------------------------------------
+;;
+;; 模型一轮里可能一次返回多个 tool call。gptel 默认串行执行，耗时相加。
+;; 这里把同一轮的工具分两路：
+;;   · body--ptools-sync-names 里的（纯 elisp、毫秒级、顺序敏感）：主线程顺序执行；
+;;   · 其余（会弹确认、起进程、写文件）：每个起一个线程并行。
+;; 结果按原 tool-call 顺序回填，并且只从主线程交回 gptel，
+;; 所以 assistant 的 tool_calls 与随后的 tool 结果仍一一对应，历史始终合法。
+
+(defvar body-parallel-tools t
+  "非 nil 时，同一轮里的多个工具调用并行执行。")
+
+(defvar body--ptools-sync-names
+  '(body_sense body_undo body_status body_self body_switch_model)
+  "这些工具在主线程跑：纯 elisp、毫秒级，且顺序敏感。")
+
+(defvar body--ptools-timeout 60
+  "等线程结果的最长秒数；超时按报错回填，别把对话卡死。")
+
+(defun body--ptools-async-p (spec)
+  "SPEC 本身是不是 gptel 的异步工具（那种交给 gptel 自己处理）。"
+  (and (fboundp 'gptel-tool-async) (gptel-tool-async spec)))
+
+(defun body--ptools-name-sym (spec)
+  (intern (gptel-tool-name spec)))
+
+(defun body--ptools-call (item)
+  "跑一个工具调用（可能在子线程里），结果写进它的 BOX。"
+  (let* ((spec (nth 0 item))
+         (args (nth 1 item))
+         (box (nth 3 item))
+         (result (condition-case err
+                     (apply (gptel-tool-function spec)
+                            (gptel--map-tool-args spec args))
+                   (error (mapconcat #'gptel--to-string err " ")))))
+    (setcar box result)
+    (setcdr box t)))
+
+(defun body--ptools-deliver (items)
+  "按原顺序把 BOX 里的结果交给 gptel（只在主线程调用）。"
+  (dolist (it (sort (copy-sequence items)
+                    (lambda (a b) (< (nth 2 a) (nth 2 b)))))
+    (funcall (nth 4 it) (car (nth 3 it)))))
+
+(defun body--ptools-finish (items server start timer)
+  "所有线程写完后一次性交付；从定时器里跑（主线程）。"
+  (cond
+   ((seq-every-p (lambda (it) (cdr (nth 3 it))) items)
+    (when (timerp timer) (cancel-timer timer))
+    (when (process-live-p server) (delete-process server))
+    (body--ptools-deliver items)
+    (message "并行工具完成（%d 个）" (length items)))
+   ((> (- (float-time) start) body--ptools-timeout)
+    (when (timerp timer) (cancel-timer timer))
+    (dolist (it items)
+      (unless (cdr (nth 3 it))
+        (setcar (nth 3 it) "工具超时，未返回结果")
+        (setcdr (nth 3 it) t)))
+    (when (process-live-p server) (delete-process server))
+    (body--ptools-deliver items)
+    (message "并行工具超时（%d 个）" (length items)))
+   (t
+    (accept-process-output server 0.02))))
+
+(defun body--ptools-run (fn tool-calls &rest args)
+  "把 TOOL-CALLS 并行化执行后再走 gptel 的交付路径。"
+  (if (or (null body-parallel-tools)
+          (null (cdr tool-calls))
+          (seq-some (lambda (call) (body--ptools-async-p (car call))) tool-calls)
+          (not (fboundp 'make-thread)))
+      (apply fn tool-calls args)
+    (let* ((items (cl-loop for (spec arg-plist proc) in tool-calls
+                           for i from 0
+                           collect (list spec arg-plist i (cons nil nil) proc)))
+           (threads '())
+           (start (float-time)))
+      (dolist (it items)
+        (when (memq (body--ptools-name-sym (nth 0 it)) body--ptools-sync-names)
+          (body--ptools-call it)))
+      (dolist (it items)
+        (unless (memq (body--ptools-name-sym (nth 0 it)) body--ptools-sync-names)
+          (push (make-thread (lambda () (body--ptools-call it))
+                             (format "body-tool:%s"
+                                     (gptel-tool-name (nth 0 it))))
+                threads)))
+      (if (null threads)
+          (progn (body--ptools-deliver items)
+                 (message "工具完成（%d 个，主线程）" (length items)))
+        (let ((server (make-pipe-process :name "body-parallel-tools" :noquery t))
+              (timer nil))
+          (setq timer (run-at-time 0.01 0.02
+                                   (lambda ()
+                                     (body--ptools-finish items server start timer))))
+          (message "并行执行 %d 个工具…" (length threads))))
+      nil)))
+
+(unless (advice-member-p #'body--ptools-run 'gptel--accept-tool-calls)
+  (advice-add 'gptel--accept-tool-calls :around #'body--ptools-run))
+
 ;;;; ------------------------------------------------------------------
 ;;;; 工具：感知
 ;;;; ------------------------------------------------------------------
@@ -557,7 +659,8 @@
 
 (defun body--maybe-ask (code)
   "默认全自动；只有 body--always-allow 为 nil 时才问一句。"
-  (if body--always-allow
+  (if (or body--always-allow
+          (not (eq (current-thread) main-thread)))
       code
     (if (not (if body-auto-approve (body--must-ask-p code) (body--dangerous-p code)))
         code
@@ -1065,7 +1168,8 @@
 - 用户消息可能带图片（截图），直接看图回答。
 - 字号、主题、face、布局、缩放在 body_eval 前自动记录，撤销时自动恢复；undo_code 只需处理变量、minor mode 等。
 - 「字体太小/太大」默认只改 default face 的 :height（每档 ±20），不要顺手改别的 face，除非用户点名。
-- 不要在回复里写思考过程，直接调用工具，然后用一两句中文说结果。"
+- 不要在回复里写思考过程，直接调用工具，然后用一两句中文说结果。
+- 互相独立的工具调用可以一轮里一次发完：body 会并行执行（省一轮往返）。有先后依赖的（先改、再验证）要分轮。"
   "主脑的系统提示。")
 
 (defvar body-sub-system-prompt
@@ -1080,6 +1184,163 @@
 - 干完、失败、或卡住时，必须调用 body_report 汇报：做了什么、结果/证据、改了哪里、下一步建议。summary 要能独立看懂——主脑只有这段文字。
 - 不要 spawn 子代理；不要 kill 用户的 Emacs。"
   "子代理的系统提示。")
+
+
+;;;; ------------------------------------------------------------------
+;;;; 预制提示词 / 长期知识（body-prompts）
+;;;; ------------------------------------------------------------------
+;;
+;; 目录：body-prompt-dir（默认 ~/.doom.d/body-prompts/）
+;; 入口：main.md，每次请求都拼在内置系统提示之后。
+;; 入口里单独写一行 {{include: 文件名}} 或 {{include: knowledge/*.md}}，
+;; 就能把偏好 / 知识 / 项目约定拆成小文件，入口本身永远不会膨胀。
+;; 支持通配符和目录名；循环引用、超过 body-prompt-max-depth 的会被跳过并留注释。
+
+(defvar body-prompt-dir (expand-file-name "body-prompts/" doom-user-dir)
+  "预制提示词目录。入口文件见 `body-prompt-entry'，内容会拼进系统提示。")
+
+(defvar body-prompt-entry "main.md"
+  "入口文件名（相对 `body-prompt-dir'）。")
+
+(defvar body-prompt-max-depth 6
+  "{{include: ...}} 的最大嵌套层数。")
+
+(defun body--prompt-path (name)
+  "NAME 相对 `body-prompt-dir' 的绝对路径。"
+  (expand-file-name name body-prompt-dir))
+
+(defun body--prompt-include-spec (line)
+  "LINE 形如 {{include: X}} 时返回 X，否则 nil。"
+  (let ((line (string-trim line)))
+    (when (and (> (length line) 12)
+               (string-prefix-p "{{include:" line)
+               (string-suffix-p "}}" line))
+      (let ((spec (string-trim (substring line 10 (- (length line) 2)))))
+        (unless (string-empty-p spec) spec)))))
+
+(defun body--prompt-include-files (spec seen depth)
+  "把 SPEC 展开成文本：SPEC 可以是文件、通配符或目录。
+SEEN 是已展开文件的 truename 列表（防环），DEPTH 是当前层数（防深）。"
+  (if (> depth body-prompt-max-depth)
+      (format "<!-- include 层数超过 %d，已跳过: %s -->\n" body-prompt-max-depth spec)
+    (let* ((base (body--prompt-path spec))
+           (files (cond ((file-directory-p base)
+                         (seq-filter (lambda (f)
+                                       (and (file-regular-p f)
+                                            (member (file-name-extension f)
+                                                    '("md" "txt" "org"))))
+                                     (sort (directory-files base t) #'string<)))
+                        ((string-match-p "[*?]" spec)
+                         (sort (file-expand-wildcards base) #'string<))
+                        (t (list base)))))
+      (mapconcat
+       (lambda (f)
+         (cond
+          ((not (file-regular-p f))
+           (format "<!-- include 找不到: %s -->\n" spec))
+          ((member (file-truename f) seen)
+           (format "<!-- include 循环引用，已跳过: %s -->\n" spec))
+          (t
+           (with-temp-buffer
+             (insert-file-contents f)
+             (body--prompt-expand-text (buffer-string)
+                                       (cons (file-truename f) seen)
+                                       (1+ depth))))))
+       files "\n"))))
+
+(defun body--prompt-expand-text (text seen depth)
+  "把 TEXT 里所有 {{include: ...}} 行原地展开。"
+  (with-temp-buffer
+    (insert text)
+    (goto-char (point-min))
+    (while (not (eobp))
+      (let* ((beg (line-beginning-position))
+             (end (line-end-position))
+             (spec (body--prompt-include-spec
+                    (buffer-substring-no-properties beg end))))
+        (if (not spec)
+            (forward-line 1)
+          (let ((replacement (body--prompt-include-files spec seen depth)))
+            (delete-region beg end)
+            (goto-char beg)
+            (insert replacement)
+            (goto-char (+ beg (length replacement)))
+            (forward-line 1)))))
+    (buffer-string)))
+
+(defun body-preload-prompt ()
+  "读取入口文件并展开 include；没有入口文件时返回 nil。"
+  (let ((entry (body--prompt-path body-prompt-entry))
+        (text nil))
+    (when (file-readable-p entry)
+      (setq text (string-trim
+                  (with-temp-buffer
+                    (insert-file-contents entry)
+                    (body--prompt-expand-text
+                     (buffer-string) (list (file-truename entry)) 0)))))
+    (unless (or (null text) (string-empty-p text)) text)))
+
+(defun body--compose-system-prompt (role)
+  "拼出最终系统提示：内置提示 + 用户预制的提示词 / 长期知识。"
+  (let ((base (if (eq role 'sub) body-sub-system-prompt body-system-prompt))
+        (preload (body-preload-prompt)))
+    (if preload
+        (concat base
+                "\n\n## 用户维护的预制提示词 / 长期知识\n"
+                "（来自 " body-prompt-dir "，改里面的文件下一条消息就生效）\n\n"
+                preload)
+      base)))
+
+(defun body--system-prompt-dynamic ()
+  "`gptel-system-prompt' 允许是函数：每次请求动态拼提示词。"
+  (body--compose-system-prompt body--session-role))
+
+;;;; 目录骨架与命令
+
+(defun body-prompts-ensure ()
+  "确保预制提示词目录骨架存在（入口文件、persona.md、knowledge/）。"
+  (interactive)
+  (make-directory (body--prompt-path "knowledge") t)
+  (let ((entry (body--prompt-path body-prompt-entry)))
+    (unless (file-exists-p entry)
+      (with-temp-file entry
+        (insert "# 用户偏好与长期知识\n\n"
+                "<!-- 每次请求都会拼进系统提示。按主题拆成小文件，用单独一行\n"
+                "     {{include: persona.md}} 或 {{include: knowledge/*.md}} 引进来，\n"
+                "     这样入口文件不会膨胀。 -->\n\n"
+                "## 沟通偏好\n"
+                "{{include: persona.md}}\n\n"
+                "## 知识库\n"
+                "{{include: knowledge/*.md}}\n"))))
+  (let ((persona (body--prompt-path "persona.md")))
+    (unless (file-exists-p persona)
+      (with-temp-file persona
+        (insert "# 沟通偏好\n\n- 用中文，简短直接，不输出思考过程。\n"))))
+  (let ((notes (body--prompt-path "knowledge/notes.md")))
+    (unless (file-exists-p notes)
+      (with-temp-file notes
+        (insert "# notes\n\n一条结论一行，附上路径或证据。\n"))))
+  body-prompt-dir)
+
+(defun body-prompts-open ()
+  "打开预制提示词入口文件（首次调用会生成骨架）。"
+  (interactive)
+  (body-prompts-ensure)
+  (find-file (body--prompt-path body-prompt-entry)))
+
+(defun body-prompt-record (note &optional file)
+  "把 NOTE 追加进知识文件（默认 knowledge/notes.md），下一条消息即生效。"
+  (interactive "s记录到提示词: ")
+  (body-prompts-ensure)
+  (let ((f (body--prompt-path (or file "knowledge/notes.md"))))
+    (make-directory (file-name-directory f) t)
+    (with-temp-buffer
+      (when (file-exists-p f) (insert-file-contents f))
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (insert (format "\n### %s\n%s\n" (format-time-string "%Y-%m-%d") note))
+      (write-region (point-min) (point-max) f nil 'silent))
+    (message "已记录到 %s" f)))
 
 ;;;; ------------------------------------------------------------------
 ;;;; 会话：配置与入口
@@ -1096,10 +1357,7 @@
     (unless gptel-mode (gptel-mode 1))
     (setq-local body--session-role (or role 'master))
     (setq-local body--session-agent agent)
-    (setq-local gptel-system-prompt
-                (if (eq (or role 'master) 'sub)
-                    body-sub-system-prompt
-                  body-system-prompt))
+    (setq-local gptel-system-prompt #'body--system-prompt-dynamic)
     (when body-model (setq-local gptel-model body-model))
     (setq-local gptel-use-tools t)
     (setq-local gptel-track-media t)
