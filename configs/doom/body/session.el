@@ -32,11 +32,17 @@
                       (mapcar (lambda (n) (ignore-errors (gptel-get-tool (list "body" n))))
                               (if (eq (or role 'master) 'sub)
                                   '("body_sense" "body_eval" "body_undo"
-                                    "body_keep" "body_report")
+                                    "body_read_file" "body_write_file"
+                                    "body_edit_file" "body_grep" "body_shell"
+                                    "body_todo" "body_report" "body_keep")
                                 '("body_sense" "body_eval" "body_undo" "body_self"
-                                  "body_switch_model" "body_keep" "body_rewrite_self"
-                                  "body_spawn" "body_send" "body_status"
-                                  "body_report" "body_close")))))
+                                  "body_switch_model" "body_keep"
+                                  "body_rewrite_self" "body_edit_self"
+                                  "body_read_prompt" "body_read_file"
+                                  "body_write_file" "body_edit_file"
+                                  "body_grep" "body_shell" "body_todo"
+                                  "body_remember" "body_spawn" "body_send"
+                                  "body_status" "body_report" "body_close")))))
     ;; 快照只追加到发出去的 prompt 副本里，不进对话历史
 (setq-local gptel-prompt-transform-functions
                 (append (default-value 'gptel-prompt-transform-functions)
@@ -48,6 +54,7 @@
     (when (eq (or role 'master) 'master)
       ;; 每轮回复结束、关掉会话时把主脑对话写盘，供 SPC j c 继续
       (add-hook 'gptel-post-response-functions #'body--save-session nil t)
+      (add-hook 'gptel-post-response-functions #'body--maybe-auto-compact nil t)
       (add-hook 'kill-buffer-hook #'body--save-session nil t))
     (dolist (k (list (or body-draft-key "C-<return>") "C-c C-c"))
       (let ((key (kbd k)))
@@ -217,6 +224,20 @@
 (defvar body-session-dir (expand-file-name "body-sessions/" doom-cache-dir)
   "身体会话存档目录。")
 
+(defun body--refresh-session-tools ()
+  "重载 body 源码后，把所有活会话的 gptel-tools 换成新注册的工具对象。"
+  (dolist (b (body--sessions))
+    (with-current-buffer b
+      (let ((names (delq nil (mapcar (lambda (spec)
+                                       (and (gptel-tool-p spec)
+                                            (gptel-tool-name spec)))
+                                     gptel-tools))))
+        (setq-local gptel-tools
+                    (delq nil
+                          (mapcar (lambda (n)
+                                    (ignore-errors (gptel-get-tool (list "body" n))))
+                                  names)))))))
+
 (defun body--master-buffer ()
   "已有的主脑会话 buffer；没有则返回 nil（不新建）。"
   (seq-find (lambda (b) (eq 'master (buffer-local-value 'body--session-role b)))
@@ -233,22 +254,39 @@
                         (expand-file-name "latest.md" body-session-dir)
                         nil 'silent))))))
 
-(add-hook 'kill-emacs-hook #'body--save-session)
+(defun body--archive-session (&optional mb)
+  "把主脑对话存一份带时间戳的存档（MB 默认主脑）。返回存档路径。"
+  (let ((mb (or mb (body--master-buffer))))
+    (when (and (buffer-live-p mb) (> (buffer-size mb) 0))
+      (make-directory body-session-dir t)
+      (let ((file (expand-file-name
+                   (format "%s.md" (format-time-string "%Y%m%d-%H%M%S"))
+                   body-session-dir)))
+        (let ((coding-system-for-write 'utf-8))
+          (with-current-buffer mb
+            (write-region (point-min) (point-max) file nil 'silent)))
+        file))))
 
-(defun body-new-session ()
-  "结束当前主脑对话（自动存档），从空白开始。"
-  (interactive)
-  (let ((mb (body--master-buffer)))
-    (when (and mb (body--busy-p mb))
-      (gptel-abort mb))
-    (body--save-session)
-    (when mb
-      (when-let* ((w (get-buffer-window mb 'visible))) (delete-window w))
-      (kill-buffer mb))
-    (setq body--master-queue nil
-          body--last-session nil)
-    (message "身体：新会话（旧对话已存 %s）"
-             (abbreviate-file-name (expand-file-name "latest.md" body-session-dir)))))
+(defun body--session-archives ()
+  "存档文件列表，新的在前。"
+  (when (file-directory-p body-session-dir)
+    (reverse (sort (directory-files body-session-dir t "\\.md\\'" t)
+                   #'string<))))
+
+(defun body--load-archive (mb file)
+  "把存档 FILE 装进主脑 MB（MB 必须是空会话）。"
+  (with-current-buffer mb
+    (when (text-property-any (point-min) (point-max) 'gptel 'response)
+      (user-error "当前会话已有内容；先 SPC j n 开新会话再继续"))
+    (when (ignore-errors (body--draft-region))
+      (user-error "末尾有未发送的草稿，先发掉或删掉再继续"))
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert-file-contents file)
+      (goto-char (point-max))
+      (unless (bolp) (insert "\n"))
+      (setq-local body--sent-end (copy-marker (point-max)))
+      (body--refresh-draft-overlay))))
 
 (defun body-continue ()
   "把最近一次存档的主脑对话装回来接着聊。
@@ -258,21 +296,142 @@
     (unless (file-exists-p file)
       (user-error "没有历史存档（%s）" (abbreviate-file-name file)))
     (let ((mb (body--master)))
-      (with-current-buffer mb
-        (when (text-property-any (point-min) (point-max) 'gptel 'response)
-          (user-error "当前会话已有内容；先 SPC j n 开新会话再继续"))
-        (when (ignore-errors (body--draft-region))
-          (user-error "末尾有未发送的草稿，先发掉或删掉再继续"))
-        (let ((inhibit-read-only t))
-          (erase-buffer)
-          (insert-file-contents file)
-          (goto-char (point-max))
-          (unless (bolp) (insert "\n"))
-          (setq-local body--sent-end (copy-marker (point-max)))
-          (body--refresh-draft-overlay)))
+      (body--load-archive mb file)
       (setq body--last-session mb)
       (select-window (body--display mb)))
     (message "身体：已接上上次对话，继续")))
+
+(defun body-continue-archive ()
+  "从历史存档列表里挑一份接上（新的在前；默认第一份=最新）。"
+  (interactive)
+  (let* ((files (body--session-archives))
+         (names (mapcar (lambda (f)
+                          (concat (file-name-nondirectory f)
+                                  (format "  (%s)"
+                                          (format-time-string
+                                           "%m-%d %H:%M"
+                                           (file-attribute-modification-time
+                                            (file-attributes f))))))
+                        files))
+         (pick (if (null files)
+                   (user-error "没有历史存档（%s）" body-session-dir)
+                 (completing-read "接上哪份存档: " names nil t nil nil
+                                  (car (or names '(nil))))))
+         (file (when pick (nth (seq-position names pick) files))))
+    (when file
+      (let ((mb (body--master)))
+        (body--load-archive mb file)
+        (setq body--last-session mb)
+        (select-window (body--display mb)))
+      (message "身体：已接上存档 %s" (file-name-nondirectory file)))))
+
+;;;; ------------------------------------------------------------------
+;;;; 上下文压缩：历史太长时，交给模型做交接摘要，替换对话内容
+;;;; ------------------------------------------------------------------
+
+(defvar body-auto-compact t
+  "非 nil 时，主脑上下文占用超过 `body-compact-threshold' 自动压缩。")
+
+(defvar body-compact-threshold 0.85
+  "自动压缩的上下文占用比例（0-1）。")
+
+(defvar body-compact-prompt
+  "把上面这段对话压缩成一份交接摘要，给同一个 agent 接着干。必须保留：用户的目标与偏好、已完成的改动（文件/路径）、重要结论与事实、未完成的步骤与下一步、错误教训。丢掉寒暄与已验证无用的尝试细节。用中文，直接输出摘要正文。"
+  "压缩请求附在历史末尾的指令。")
+
+(defvar body--compacting nil
+  "正在压缩主脑上下文的标记（防重入）。")
+
+(defun body--context-ratio (buf)
+  "BUF 的上下文占用比例（token / 窗口）；未知返回 nil。"
+  (when (buffer-live-p buf)
+    (let* ((tok (buffer-local-value 'body--last-req buf))
+           (sum (+ (or (plist-get tok :input) 0)
+                   (or (plist-get tok :cached) 0)
+                   (or (plist-get tok :output) 0)))
+           (win (body--context-window
+                 (ignore-errors (buffer-local-value 'gptel-model buf)))))
+      (when (and (> sum 0) win (> win 0))
+        (/ (float sum) win)))))
+
+(defun body--maybe-auto-compact (&rest _)
+  "回复结束后看一眼上下文水位，超阈值就自动压缩。"
+  (when (and body-auto-compact (not body--compacting))
+    (let ((mb (body--master-buffer)))
+      (when (and (buffer-live-p mb) (not (body--busy-p mb)))
+        (let ((r (body--context-ratio mb)))
+          (when (and r (> r body-compact-threshold))
+            (message "身体：上下文已到 %d%%，自动压缩…"
+                     (round (* 100 r)))
+            (run-with-idle-timer 0.5 nil
+                                 (lambda ()
+                                   (ignore-errors (body-compact))))))))))
+
+(defun body--apply-compact (mb summary)
+  "用 SUMMARY 替换 MB 的对话内容（原文已另存时间戳存档）。"
+  (with-current-buffer mb
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (insert (gptel-prompt-prefix-string)
+              "（前面对话已压缩 @ "
+              (format-time-string "%m-%d %H:%M")
+              "，原文在 body-sessions/ 时间戳存档）\n\n"
+              gptel-response-separator
+              (gptel-response-prefix-string)
+              (string-trim summary) "\n")
+      (goto-char (point-max))
+      (setq-local body--sent-end (copy-marker (point-max)))
+      (body--refresh-draft-overlay)))
+  (setq body--last-session mb)
+  (message "身体：对话已压缩"))
+
+(defun body-compact ()
+  "压缩主脑对话：全文先另存时间戳存档，再把历史交给当前模型做交接摘要，
+用摘要替换对话内容。模型不可达时不破坏原对话。"
+  (interactive)
+  (let ((mb (body--master-buffer)))
+    (unless (and (buffer-live-p mb) (> (buffer-size mb) 0))
+      (user-error "主脑没有可压缩的对话"))
+    (when (body--busy-p mb)
+      (user-error "主脑正在回复，稍后再压"))
+    (let ((file (body--archive-session mb))
+          (body--compacting t))
+      (message "身体：正在压缩（原文已存 %s）"
+               (if file (file-name-nondirectory file) "（空）"))
+      (with-current-buffer mb
+        (let ((gptel-use-tools nil))
+          (gptel-request
+           body-compact-prompt
+           :buffer mb
+           :stream nil
+           :callback
+           (lambda (response info)
+             (setq body--compacting nil)
+             (if (not (stringp response))
+                 (message "身体：压缩失败（%s），对话未动"
+                          (or (plist-get info :status) "无响应"))
+               (condition-case err
+                   (body--apply-compact mb response)
+                 (error (message "身体：压缩后写回失败: %s"
+                                 (error-message-string err))))))))))))
+
+(add-hook 'kill-emacs-hook #'body--save-session)
+
+(defun body-new-session ()
+  "结束当前主脑对话（自动存档），从空白开始。"
+  (interactive)
+  (let ((mb (body--master-buffer)))
+    (when (and mb (body--busy-p mb))
+      (gptel-abort mb))
+    (body--archive-session)
+    (body--save-session)
+    (when mb
+      (when-let* ((w (get-buffer-window mb 'visible))) (delete-window w))
+      (kill-buffer mb))
+    (setq body--master-queue nil
+          body--last-session nil)
+    (message "身体：新会话（旧对话已存档于 %s）"
+             (abbreviate-file-name body-session-dir))))
 
 (provide 'body-session)
 ;;; body/session.el ends here

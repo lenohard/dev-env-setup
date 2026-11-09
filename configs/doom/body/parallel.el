@@ -21,8 +21,12 @@
   "非 nil 时，同一轮里的多个工具调用并行执行。")
 
 (defvar body--ptools-sync-names
-  '(body_sense body_undo body_status body_self body_switch_model)
-  "这些工具在主线程跑：纯 elisp、毫秒级，且顺序敏感。")
+  '(body_sense body_undo body_status body_self body_switch_model
+    body_todo body_remember body_read_prompt body_read_file
+    body_write_file body_edit_file body_edit_self body_eval)
+  "这些工具在主线程顺序执行：要么毫秒级、要么顺序敏感，
+要么像 body_eval 需要在主线程上弹 minibuffer 问权限
+（子线程里 body--maybe-ask 只能跳过询问直接放行，不安全）。")
 
 (defvar body--ptools-timeout 60
   "等线程结果的最长秒数；超时按报错回填，别把对话卡死。")

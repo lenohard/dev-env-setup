@@ -1,11 +1,8 @@
 # 用户偏好与长期知识
 
-<!-- 每次请求都会拼进系统提示。按主题拆成小文件，用单独一行
-     {{include: persona.md}} 或 {{include: knowledge/*.md}} 引进来，
-     这样入口文件不会膨胀。 -->
+<!-- main.md 是唯一全文拼进系统提示的文件——只放最重要的内容。
+     其它文件（persona.md、knowledge/*）不拼接，只在系统提示里列出索引，
+     agent 需要时用 body_read_prompt 工具按需读取。 -->
 
 ## 沟通偏好
-{{include: persona.md}}
-
-## 知识库
-{{include: knowledge/*.md}}
+- 用中文，简短直接，不输出思考过程。

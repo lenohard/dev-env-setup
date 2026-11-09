@@ -226,6 +226,16 @@
 ;;;; 快照：拼装
 ;;;; ------------------------------------------------------------------
 
+(defun body--todo-line ()
+  "当前计划（body_todo 维护）。"
+  (when body--todo
+    (concat "计划(body_todo 更新):\n"
+            (string-join
+             (cl-loop for i from 1 for it in body--todo
+                      collect (format "  %d. %s" i
+                                      (truncate-string-to-width it 120 nil nil "…")))
+             "\n"))))
+
 (defun body--recent-changes (n)
   (when body--undo-stack
     (format "最近改动: %s"
@@ -308,6 +318,7 @@
             (when others
               (concat "其它窗口:\n"
                       (string-join (mapcar #'body--window-header others) "\n")))
+            (body--todo-line)
             (body--recent-changes 3)
             (body--new-commands-line)
             (body--agents-line)

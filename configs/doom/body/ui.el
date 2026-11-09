@@ -219,8 +219,10 @@
         :desc "Body ask"        "j a"   #'body-ask
         :desc "Body submit"     "j RET" #'body-submit
         :desc "Body continue"   "j c"   #'body-continue
+        :desc "Body 存档挑选"   "j p"   #'body-continue-archive
         :desc "Body new"        "j n"   #'body-new-session
         :desc "Body ask + 图片" "j i"   #'body-ask-image
+        :desc "Body 压缩上下文" "j m"   #'body-compact
         :desc "Body toggle"     "j b"   #'body-toggle
         :desc "Tool log"        "j t"   #'body-tool-log-toggle
         :desc "Body undo"       "j u"   #'body-undo

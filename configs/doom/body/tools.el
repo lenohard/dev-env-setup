@@ -38,6 +38,9 @@
 ;;;; 工具：感知
 ;;;; ------------------------------------------------------------------
 
+(defvar body-sense-cap 12000
+  "body_sense 读 buffer 时的字符上限（更长用 body_read_file 分段读）。")
+
 (defun body--read-buffer (name &optional from to)
   (let ((buf (get-buffer name)))
     (if (not buf)
@@ -48,8 +51,13 @@
                     (point-min)))
                (e (if to (save-excursion (goto-char (point-min))
                                          (forward-line to) (point))
-                    (point-max))))
-          (buffer-substring-no-properties b (min e (point-max))))))))
+                    (point-max)))
+               (text (buffer-substring-no-properties b (min e (point-max)))))
+          (if (> (length text) body-sense-cap)
+              (concat (substring text 0 body-sense-cap)
+                      (format "\n…(共 %d 字符已截断；用 from/to 行号或 body_read_file 分段读)"
+                              (length text)))
+            text))))))
 
 (defvar body-auto-approve t
   "非 nil 时 body_eval 对常规操作直接执行，不再询问。

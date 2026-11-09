@@ -16,6 +16,7 @@
 每条用户消息末尾带一个 <身体状态> 块，是你的本体感觉（增量汇报）：
 - 外观：字号/主题/frame 的绝对值；有变化时标「← 刚变: 字号 140→160」。
 - 模型、用量：每轮都有，不必为这两项调 body_self。
+- 计划：你自己用 body_todo 维护的任务清单，多步任务先立计划再动手。
 - 焦点窗口：buffer/mode/行范围/光标行/缩放；有选区时给出选中文字。
 - 可见内容：首轮全量；同一 buffer 之后给相对上一轮的 diff（~改 +增，▸=光标行），没变就写「与上一轮相同」。
 - 最近命令(新增)：自上一轮以来用户新敲的命令，是判断「用户刚干了什么」的唯一线索。
@@ -23,13 +24,22 @@
 - subagent / 共享记忆：子代理状态与它们最近汇报的结论。
 不要复述这个块。用它理解「这里」「这段」「这个」「太小了」这类指代。
 
-工具：
-- body_eval：在用户焦点窗口求值 elisp，改外观/布局/行为或执行动作。几乎一切改动都走它。优先用 Doom/Emacs 原生方式（set-face-attribute、load-theme、text-scale、窗口函数等）。summary 用简短中文，undo_code 给倒退代码。
-- body_sense：需要看更多时用（读 buffer、列 buffer、只读求值查状态）。
-- body_undo：撤销上一次改动。
+改造身体（elisp）：
+- body_eval：在用户焦点窗口求值 elisp，改外观/布局/行为或执行动作。优先用 Doom/Emacs 原生方式（set-face-attribute、load-theme、text-scale、窗口函数等）。summary 用简短中文，undo_code 给倒退代码。
+- body_undo：撤销上一次改动（elisp 和文件改动都在栈里）。
+
+文件（通用 coding 能力）：
+- body_read_file / body_write_file / body_edit_file：带行号读、覆盖写（自动备份）、唯一锚点精确替换。改用户项目代码就用这三个，别再用 body_eval 拼 write-region。
+- body_grep：ripgrep 搜内容。
+- body_shell：在用户目录跑命令，默认 30s 超时，危险模式会问用户。
+
+感知与记忆：
+- body_sense：看 buffer / 列 buffer / 只读求值查状态（输出有上限，长内容用 body_read_file）。
+- body_read_prompt：按需读 body-prompts/ 下的提示词/知识文件（系统提示里只拼 main.md 全文 + 其它文件的索引）。
+- body_remember：把可复用的结论写进长期记忆（knowledge/notes.md）。
 - body_self / body_switch_model：查模型/网关、切换模型。
-- body_keep：用户明确说「记住/以后也这样」时，把改动永久写进基因。
-- body_rewrite_self：给自己改源码。content 传完整 body.el 或 ::file::路径。绝不要用 body_eval 里的 write-region 直接写 body.el 或 config.el——那绕过语法校验，写坏了下次启动就崩。
+- body_keep：用户明确说「记住/以后也这样」时，把 elisp 改动永久写进基因。
+- body_rewrite_self / body_edit_self：改自己的源码（模块化后可按模块改，见索引），带语法校验、备份、回滚。绝不要用 body_write_file 直接写 body/ 模块——那绕过校验和回滚。
 
 主从（重要）：
 - 你自己不干长活。耗时、可独立、要多次试错的事（批量改文件、跑测试、大范围调研、反复调试）用 body_spawn 派给子代理，然后回去跟用户说话。
@@ -44,7 +54,8 @@
 - 字号、主题、face、布局、缩放在 body_eval 前自动记录，撤销时自动恢复；undo_code 只需处理变量、minor mode 等。
 - 「字体太小/太大」默认只改 default face 的 :height（每档 ±20），不要顺手改别的 face，除非用户点名。
 - 不要在回复里写思考过程，直接调用工具，然后用一两句中文说结果。
-- 互相独立的工具调用可以一轮里一次发完：body 会并行执行（省一轮往返）。有先后依赖的（先改、再验证）要分轮。"
+- 互相独立的工具调用可以一轮里一次发完：body 会并行执行（省一轮往返）。有先后依赖的（先改、再验证）要分轮。
+- 上下文快满时（状态里会显示百分比）body 会自动压缩历史；你自己别贴大段文件进对话。"
   "主脑的系统提示。")
 
 (defvar body-sub-system-prompt
@@ -52,7 +63,9 @@
 
 做事方式：
 - 直接干，不要问用户（用户看不到你的 buffer，也基本不会回答）。不确定就取合理默认，写进汇报。
-- 用 body_sense 看现状（读 buffer、列 buffer、只读求值），用 body_eval 改东西（外观/布局/文件内容/执行命令）。改动尽量小、可回滚，summary 写清做了什么。
+- 看现状：body_sense（buffer/状态）或 body_read_file（带行号读文件）。
+- 改东西：外观/布局用 body_eval；改文件内容用 body_edit_file（唯一锚点替换）/ body_write_file（整文件重写）——都自带备份和撤销。搜索用 body_grep，跑命令用 body_shell（30s 超时）。改动尽量小、可回滚。
+- 多步任务先 body_todo 立个计划，干一步勾一步。
 - 只做任务范围内的事，别顺手改用户的东西。
 
 收尾（必须）：
@@ -66,109 +79,132 @@
 ;;;; ------------------------------------------------------------------
 ;;
 ;; 目录：body-prompt-dir（默认 ~/.doom.d/body-prompts/）
-;; 入口：main.md，每次请求都拼在内置系统提示之后。
-;; 入口里单独写一行 {{include: 文件名}} 或 {{include: knowledge/*.md}}，
-;; 就能把偏好 / 知识 / 项目约定拆成小文件，入口本身永远不会膨胀。
-;; 支持通配符和目录名；循环引用、超过 body-prompt-max-depth 的会被跳过并留注释。
+;; 规则（保持入口轻）：
+;;   · main.md 是唯一全文拼进系统提示的文件——只放最重要的内容；
+;;   · 其它文件不拼接，只在系统提示里给一行索引（相对路径 + 首个标题 + 大小）；
+;;   · agent 需要时用 body_read_prompt 工具按需读取。
 
 (defvar body-prompt-dir (expand-file-name "body-prompts/" doom-user-dir)
   "预制提示词目录。入口文件见 `body-prompt-entry'，内容会拼进系统提示。")
 
 (defvar body-prompt-entry "main.md"
-  "入口文件名（相对 `body-prompt-dir'）。")
+  "入口文件名（相对 `body-prompt-dir'），唯一全文拼接的文件。")
 
-(defvar body-prompt-max-depth 6
-  "{{include: ...}} 的最大嵌套层数。")
+(defvar body-prompt-read-cap 16000
+  "body_read_prompt 单次返回的字符上限。")
 
 (defun body--prompt-path (name)
   "NAME 相对 `body-prompt-dir' 的绝对路径。"
   (expand-file-name name body-prompt-dir))
 
-(defun body--prompt-include-spec (line)
-  "LINE 形如 {{include: X}} 时返回 X，否则 nil。"
-  (let ((line (string-trim line)))
-    (when (and (> (length line) 12)
-               (string-prefix-p "{{include:" line)
-               (string-suffix-p "}}" line))
-      (let ((spec (string-trim (substring line 10 (- (length line) 2)))))
-        (unless (string-empty-p spec) spec)))))
+(defun body--prompt-files ()
+  "`body-prompt-dir' 下所有 md/txt/org 文件（含子目录），按路径排序。"
+  (when (file-directory-p body-prompt-dir)
+    (let ((acc '()))
+      (cl-labels ((walk (dir)
+                       (dolist (f (directory-files dir t "^[^.]"))
+                         (cond ((file-directory-p f) (walk f))
+                               ((member (file-name-extension f) '("md" "txt" "org"))
+                                (push f acc))))))
+        (walk body-prompt-dir))
+      (sort acc #'string<))))
 
-(defun body--prompt-include-files (spec seen depth)
-  "把 SPEC 展开成文本：SPEC 可以是文件、通配符或目录。
-SEEN 是已展开文件的 truename 列表（防环），DEPTH 是当前层数（防深）。"
-  (if (> depth body-prompt-max-depth)
-      (format "<!-- include 层数超过 %d，已跳过: %s -->\n" body-prompt-max-depth spec)
-    (let* ((base (body--prompt-path spec))
-           (files (cond ((file-directory-p base)
-                         (seq-filter (lambda (f)
-                                       (and (file-regular-p f)
-                                            (member (file-name-extension f)
-                                                    '("md" "txt" "org"))))
-                                     (sort (directory-files base t) #'string<)))
-                        ((string-match-p "[*?]" spec)
-                         (sort (file-expand-wildcards base) #'string<))
-                        (t (list base)))))
-      (mapconcat
-       (lambda (f)
-         (cond
-          ((not (file-regular-p f))
-           (format "<!-- include 找不到: %s -->\n" spec))
-          ((member (file-truename f) seen)
-           (format "<!-- include 循环引用，已跳过: %s -->\n" spec))
-          (t
-           (with-temp-buffer
-             (insert-file-contents f)
-             (body--prompt-expand-text (buffer-string)
-                                       (cons (file-truename f) seen)
-                                       (1+ depth))))))
-       files "\n"))))
+(defun body--prompt-first-heading (file)
+  "FILE 的第一个 Markdown 标题（去掉 # 前缀）；没有就取首行前 40 字。"
+  (condition-case nil
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-min))
+        (if (re-search-forward "^#+" nil t)
+            (string-trim (buffer-substring-no-properties
+                          (match-beginning 0) (line-end-position)))
+          (truncate-string-to-width
+           (string-trim (buffer-substring-no-properties
+                         (point-min) (min 40 (point-max))))
+           40 nil nil "…")))
+    (error "?")))
 
-(defun body--prompt-expand-text (text seen depth)
-  "把 TEXT 里所有 {{include: ...}} 行原地展开。"
-  (with-temp-buffer
-    (insert text)
-    (goto-char (point-min))
-    (while (not (eobp))
-      (let* ((beg (line-beginning-position))
-             (end (line-end-position))
-             (spec (body--prompt-include-spec
-                    (buffer-substring-no-properties beg end))))
-        (if (not spec)
-            (forward-line 1)
-          (let ((replacement (body--prompt-include-files spec seen depth)))
-            (delete-region beg end)
-            (goto-char beg)
-            (insert replacement)
-            (goto-char (+ beg (length replacement)))
-            (forward-line 1)))))
-    (buffer-string)))
+(defun body--human-size (n)
+  (cond ((null n) "?")
+        ((>= n 1048576) (format "%.1fM" (/ n 1048576.0)))
+        ((>= n 1024) (format "%.1fk" (/ n 1024.0)))
+        (t (format "%dB" n))))
+
+(defun body--prompt-index ()
+  "除入口外的所有提示词文件的索引行。"
+  (when-let* ((files (seq-remove
+                      (lambda (f)
+                        (equal (file-relative-name f body-prompt-dir)
+                               body-prompt-entry))
+                      (body--prompt-files))))
+    (mapcar
+     (lambda (f)
+       (format "- %s — %s — %s"
+               (file-relative-name f body-prompt-dir)
+               (body--prompt-first-heading f)
+               (body--human-size
+                (file-attribute-size (file-attributes f)))))
+     files)))
 
 (defun body-preload-prompt ()
-  "读取入口文件并展开 include；没有入口文件时返回 nil。"
-  (let ((entry (body--prompt-path body-prompt-entry))
-        (text nil))
+  "入口文件 main.md 的原文（不展开任何东西）；没有或为空返回 nil。"
+  (let ((entry (body--prompt-path body-prompt-entry)))
     (when (file-readable-p entry)
-      (setq text (string-trim
-                  (with-temp-buffer
-                    (insert-file-contents entry)
-                    (body--prompt-expand-text
-                     (buffer-string) (list (file-truename entry)) 0)))))
-    (unless (or (null text) (string-empty-p text)) text)))
+      (let ((text (string-trim
+                   (with-temp-buffer
+                     (insert-file-contents entry)
+                     (buffer-string)))))
+        (unless (string-empty-p text) text)))))
 
 (defun body--compose-system-prompt (role)
-  "拼出最终系统提示：内置提示 + 用户预制的提示词 / 长期知识。"
+  "拼出最终系统提示：内置提示 + main.md 全文 + 其它提示词文件的索引。"
   (let ((base (if (eq role 'sub) body-sub-system-prompt body-system-prompt))
-        (preload (body-preload-prompt)))
-    (if preload
-        (concat base
-                "\n\n## 用户维护的预制提示词 / 长期知识\n"
-                "（来自 " body-prompt-dir "，改里面的文件下一条消息就生效）\n\n"
-                preload)
-      base)))
+        (preload (body-preload-prompt))
+        (index (body--prompt-index)))
+    (cond
+     ((and (null preload) (null index)) base)
+     ((null preload)
+      (concat base
+              "\n\n## 用户提示词目录 " body-prompt-dir "\n"
+              "（还没有 main.md，可让用户创建；下面是现有文件索引）\n"
+              (string-join index "\n")))
+     (t
+      (concat base
+              "\n\n## 用户维护的核心提示（" body-prompt-dir "main.md 全文）\n"
+              "（改这个文件，下一条消息就生效）\n\n"
+              preload
+              (when index
+                (concat "\n\n## 其它提示词/知识文件（不拼接，用 body_read_prompt 按需读）\n"
+                        (string-join index "\n"))))))))
 
 (defun body--system-prompt-dynamic ()
   "`gptel-system-prompt' 允许是函数：每次请求动态拼提示词。"
   (body--compose-system-prompt body--session-role))
+
+;;;; 工具：按需读提示词文件
+
+(gptel-make-tool
+ :name "body_read_prompt"
+ :category "body"
+ :description "读 body-prompts 目录下的一个提示词/知识文件（如 persona.md、knowledge/notes.md）。系统提示里只拼了 main.md 和其它文件的索引；需要某个文件的具体内容时用这个工具。"
+ :args '((:name "file" :type string
+          :description "相对 body-prompts 的路径，如 knowledge/notes.md"))
+ :function
+ (lambda (file)
+   (let* ((rel (string-trim file))
+          (f (body--prompt-path rel)))
+     (cond
+      ((not (file-in-directory-p f body-prompt-dir))
+       (format "拒绝：%s 不在 body-prompts 目录里。" rel))
+      ((not (file-regular-p f))
+       (format "没有这个文件: %s。现有文件：\n%s"
+               rel (string-join (or (body--prompt-index) '("（空）")) "\n")))
+      (t (let ((text (with-temp-buffer
+                       (insert-file-contents f)
+                       (buffer-string))))
+           (if (> (length text) body-prompt-read-cap)
+               (concat (substring text 0 body-prompt-read-cap) "\n…(截断)")
+             text)))))))
 
 ;;;; 目录骨架与命令
 
@@ -180,17 +216,14 @@ SEEN 是已展开文件的 truename 列表（防环），DEPTH 是当前层数�
     (unless (file-exists-p entry)
       (with-temp-file entry
         (insert "# 用户偏好与长期知识\n\n"
-                "<!-- 每次请求都会拼进系统提示。按主题拆成小文件，用单独一行\n"
-                "     {{include: persona.md}} 或 {{include: knowledge/*.md}} 引进来，\n"
-                "     这样入口文件不会膨胀。 -->\n\n"
-                "## 沟通偏好\n"
-                "{{include: persona.md}}\n\n"
-                "## 知识库\n"
-                "{{include: knowledge/*.md}}\n"))))
+                "<!-- main.md 是唯一全文拼进系统提示的文件，只放最重要的内容；\n"
+                "     其它文件（persona.md、knowledge/*）只出现在索引里，\n"
+                "     agent 用 body_read_prompt 按需读取。 -->\n\n"
+                "## 沟通偏好\n- 用中文，简短直接，不输出思考过程。\n"))))
   (let ((persona (body--prompt-path "persona.md")))
     (unless (file-exists-p persona)
       (with-temp-file persona
-        (insert "# 沟通偏好\n\n- 用中文，简短直接，不输出思考过程。\n"))))
+        (insert "# 沟通偏好（详细版）\n", "- 用中文，简短直接，不输出思考过程。\n"))))
   (let ((notes (body--prompt-path "knowledge/notes.md")))
     (unless (file-exists-p notes)
       (with-temp-file notes

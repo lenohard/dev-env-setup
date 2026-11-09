@@ -113,38 +113,133 @@
                (format "已写入基因: %s（已校验语法，旧文件已备份）" note)))
          (error (format "写入失败: %s" (error-message-string err))))))))
 
+;;;; ------------------------------------------------------------------
+;;;; 改写自身（模块化：body.el 入口 + body/ 下各模块）
+;;;; ------------------------------------------------------------------
+
+(defvar body-modules
+  '("core" "snapshot" "parallel" "tools" "harness" "agents" "self" "prompt"
+    "session" "ui")
+  "body/ 下的模块文件名（不带 .el）。改自身时 body_rewrite_self/body_edit_self
+的 file 参数取这些名字，或 \"body.el\" 表示入口。")
+
+(defun body--self-file-for (name)
+  "NAME（模块名或 \"body.el\"）→ 绝对路径；不认识返回 nil。"
+  (cond
+   ((or (null name) (member name '("body.el" "body" "main" "entry")))
+    body-self-file)
+   ((member name body-modules)
+    (expand-file-name (concat name ".el")
+                      (expand-file-name "body" (file-name-directory body-self-file))))
+   (t nil)))
+
+(defun body--self-files-line ()
+  "给 agent 看的自身文件清单。"
+  (format "body.el（入口） + body/{%s}" (string-join body-modules ", ")))
+
+(defun body--self-reload ()
+  "重载整个 body（入口会重置工具/advices 并按序重载各模块），
+成功后把活会话的 gptel-tools 刷新成新对象。出错时信号抛出。"
+  (load body-self-file nil t)
+  (when (fboundp 'body--refresh-session-tools)
+    (body--refresh-session-tools)))
+
+(defun body--self-rollback (file bak)
+  "把 FILE 恢复成 BAK 的内容并重载。"
+  (when (and bak (file-exists-p bak))
+    (copy-file bak file t)
+    (ignore-errors (body--self-reload))))
+
 (gptel-make-tool
  :name "body_rewrite_self"
  :category "body"
- :description "改写身体自身的源文件 body.el（给自己长新器官/改现有实现）。content 是 body.el 的完整新内容，也可以写 ::file::/绝对路径 表示从该文件读。写入前做结构扫描校验，不过则拒绝；自动备份旧文件并试 load，load 报错就回滚。"
- :args '((:name "content" :type string :description "body.el 的完整新内容")
+ :description "整体改写身体的一个源文件，给自己长新器官/改现有实现。file 是模块名（如 tools/prompt/session，或 body.el 表示入口，默认 body.el）；content 是该文件的完整新内容，也可用 ::file::绝对路径 表示从该文件读。写入前语法校验，不过则拒绝；自动备份旧文件；试重载，load 报错就回滚。成功后所有活会话的工具立即换成新版。"
+ :args '((:name "content" :type string :description "目标文件的完整新内容（或 ::file::路径）")
+         (:name "file" :type string :optional t
+          :description "模块名：core/snapshot/parallel/tools/harness/agents/self/prompt/session/ui，或 body.el（默认）")
          (:name "note" :type string :description "一句话中文说明这次改了什么"))
  :confirm nil
  :function
- (lambda (content note)
-   (let* ((content (body--content-arg content))
-          (chk (body--elisp-valid-p content)))
-     (if (not (car chk))
-         (format "拒绝：新 body.el 语法不合法（%s）。未改动。" (cdr chk))
-       (condition-case err
-           (let ((bak (format "%s.bak-%s" body-self-file
-                              (format-time-string "%Y%m%d-%H%M%S"))))
-             (when (file-exists-p body-self-file)
-               (copy-file body-self-file bak t))
-             (with-temp-buffer
-               (insert content)
-               (write-region (point-min) (point-max) body-self-file))
-             ;; 试 load；失败就回滚
-             (condition-case lerr
-                 (progn (load body-self-file nil t)
-                        (format "已改写 body.el：%s（语法+加载均通过，旧版备份 %s）"
-                                note (abbreviate-file-name bak)))
-               (error
-                (when (file-exists-p bak) (copy-file bak body-self-file t)
-                      (ignore-errors (load body-self-file nil t)))
-                (format "已回滚：新 body.el 加载时报错（%s），已恢复旧版。"
-                        (error-message-string lerr)))))
-         (error (format "写入失败: %s" (error-message-string err))))))))
+ (lambda (content &optional file note)
+   (let* ((target (body--self-file-for file))
+          (note (or note "改写自身")))
+     (cond
+      ((null target)
+       (format "拒绝：不认识的 file %s。可用：%s" file (body--self-files-line)))
+      (t
+       (let* ((content (body--content-arg content))
+              (chk (body--elisp-valid-p content)))
+         (if (not (car chk))
+             (format "拒绝：新 %s 语法不合法（%s）。未改动。" (or file "body.el") (cdr chk))
+           (condition-case err
+               (let ((bak (format "%s.bak-%s" target
+                                  (format-time-string "%Y%m%d-%H%M%S"))))
+                 (when (file-exists-p target) (copy-file target bak t))
+                 (with-temp-buffer
+                   (insert content)
+                   (write-region (point-min) (point-max) target))
+                 (condition-case lerr
+                     (progn (body--self-reload)
+                            (format "已改写 %s：%s（语法+加载均通过，旧版备份 %s）"
+                                    (or file "body.el") note
+                                    (file-name-nondirectory bak)))
+                   (error
+                    (body--self-rollback target bak)
+                    (format "已回滚：新文件加载时报错（%s），已恢复旧版。"
+                            (error-message-string lerr)))))
+             (error (format "写入失败: %s" (error-message-string err)))))))))))
+
+(gptel-make-tool
+ :name "body_edit_self"
+ :category "body"
+ :description "对身体的一个源文件做一处精确替换（推荐的小步改法）：old 必须在该文件中恰好出现一次，否则拒绝并报告次数。带语法校验、备份、试重载、失败回滚。file 是模块名（tools/prompt/…，或 body.el 默认）。"
+ :args '((:name "file" :type string :description "模块名，如 tools；body.el=入口")
+         (:name "old" :type string :description "被替换的原文（在该文件中必须唯一）")
+         (:name "new" :type string :description "替换后的新文本")
+         (:name "note" :type string :optional t :description "一句话说明改了什么"))
+ :confirm nil
+ :function
+ (lambda (file old new &optional note)
+   (let ((target (body--self-file-for file)))
+     (cond
+      ((null target)
+       (format "拒绝：不认识的 file %s。可用：%s" file (body--self-files-line)))
+      ((string-empty-p old) "拒绝：old 是空字符串")
+      (t
+       (let* ((text (with-temp-buffer
+                      (insert-file-contents target)
+                      (buffer-string)))
+              (n (body--count-occurrences text old)))
+         (cond
+          ((/= n 1)
+           (format "拒绝：old 在 %s 里出现 %d 次，必须恰好 1 次。换更长的上下文锚点。"
+                   file n))
+          (t
+           (let ((newtext (replace-regexp-in-string
+                           (regexp-quote old) new text t t))
+                 (chk (body--elisp-valid-p
+                       (replace-regexp-in-string
+                        (regexp-quote old) new text t t))))
+             (if (not (car chk))
+                 (format "拒绝：替换后 %s 语法不合法（%s）。未改动。"
+                         file (cdr chk))
+               (condition-case err
+                   (let ((bak (format "%s.bak-%s" target
+                                      (format-time-string "%Y%m%d-%H%M%S"))))
+                     (copy-file target bak t)
+                     (with-temp-buffer
+                       (insert newtext)
+                       (write-region (point-min) (point-max) target))
+                     (condition-case lerr
+                         (progn (body--self-reload)
+                                (format "已修改 %s：%s（加载通过，备份 %s）"
+                                        file (or note "一处改动")
+                                        (file-name-nondirectory bak)))
+                       (error
+                        (body--self-rollback target bak)
+                        (format "已回滚：修改后加载报错（%s），已恢复旧版。"
+                                (error-message-string lerr)))))
+                 (error (format "写入失败: %s" (error-message-string err))))))))))))))
 
 ;;;; ------------------------------------------------------------------
 ;;;; 基因加载（启动时）

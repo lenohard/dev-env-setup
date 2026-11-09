@@ -13,9 +13,11 @@
 ;;   M-x body-ask     （SPC j a）—— 跟主脑说一句话（主脑忙则排队）
 ;;   M-x body-submit  （SPC j RET）—— 把对话窗末尾的草稿发出去（窗内 C-<return> 同效）
 ;;   M-x body-continue（SPC j c）—— 接着上次的对话继续（读最近存档）
+;;   M-x body-continue-archive（SPC j p）—— 从时间戳存档里挑一份接上
 ;;   M-x body-new-session（SPC j n）—— 结束当前对话、开新的（旧的自动存档）
+;;   M-x body-compact （SPC j m）—— 手动压缩对话上下文（自动阈值外备用）
 ;;   M-x body-toggle  （SPC j b）—— 开/关右侧对话窗
-;;   M-x body-undo    （SPC j u）—— 撤销上一次身体改动
+;;   M-x body-undo    （SPC j u）—— 撤销上一次身体改动（elisp + 文件都在栈里）
 ;;   M-x body-stop    （SPC j k）—— 停下正在进行的请求
 ;;   M-x body-agents  （SPC j l）—— 看所有子代理状态
 
@@ -52,7 +54,7 @@
 
 (defvar body--dir (file-name-directory (or load-file-name buffer-file-name)))
 
-(dolist (f '("core" "snapshot" "parallel" "tools" "agents"
+(dolist (f '("core" "snapshot" "parallel" "tools" "harness" "agents"
             "self" "prompt" "session" "ui"))
   (load (expand-file-name (concat f ".el") (expand-file-name "body" body--dir))
         nil t))
