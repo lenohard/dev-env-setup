@@ -251,7 +251,13 @@ create_symlink "$CONFIGS_DIR/hammerspoon" "$HOME/.hammerspoon" "Hammerspoon conf
 echo ""
 echo "--- Ghostty Configuration ---"
 
-create_symlink "$CONFIGS_DIR/ghostty/config" "$HOME/.config/ghostty/config" "Ghostty config"
+# macOS 用共享 config（cmd 键位）；其他平台软链 config.linux（Alt 键位，
+# 它用 config-file 先引入共享 config，所以两边只维护一份主体配置）
+GHOSTTY_CONFIG="$CONFIGS_DIR/ghostty/config"
+if [[ "$IS_MACOS" != "true" && -f "$CONFIGS_DIR/ghostty/config.linux" ]]; then
+    GHOSTTY_CONFIG="$CONFIGS_DIR/ghostty/config.linux"
+fi
+create_symlink "$GHOSTTY_CONFIG" "$HOME/.config/ghostty/config" "Ghostty config"
 
 # ----------------------------------------
 # 5. Tmux Configuration

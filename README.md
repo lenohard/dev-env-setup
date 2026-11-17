@@ -120,7 +120,7 @@ The installer creates these symlinks:
 | `configs/nvim/vim_runtime` | `~/.config/nvim` |
 | `configs/nvim/vimrc` | `~/.vimrc` |
 | `configs/hammerspoon/` | `~/.hammerspoon/` |
-| `configs/ghostty/config` | `~/.config/ghostty/config` |
+| `configs/ghostty/config`（macOS）/ `configs/ghostty/config.linux`（Linux） | `~/.config/ghostty/config` |
 | `configs/tmux/tmux.conf` | `~/.tmux.conf` |
 | `configs/ripgreprc` | `~/.ripgreprc` |
 | `configs/doom/` | `~/.doom.d` (Doom Emacs DOOMDIR) |
@@ -192,6 +192,16 @@ Some configs reference paths specific to the original machine. When moving to a 
 ### Ghostty (`configs/ghostty/config`)
 - Font settings (Iosevka Nerd Font)
 - Theme (Kibble)
+
+`configs/ghostty/config` 是 **macOS 主配置**（cmd 键位）。Linux 上 install.sh 会改链
+`configs/ghostty/config.linux`，它先 `config-file = config` 引入主配置，再用 Alt 复刻
+mac 的 Cmd 键位（Linux 没有 cmd，且 mac 键盘 Cmd 的物理位置就是 PC 键盘 Alt 的位置）：
+
+| 操作 | macOS | Linux |
+|---|---|---|
+| tmux 面板缩放 | `cmd+ctrl+enter` | `ctrl+alt+enter` |
+| tmux 右/下分屏 | `cmd+ctrl+\` / `cmd+ctrl+-` | `ctrl+alt+\` / `ctrl+alt+-` |
+| tmux 窗口 1..9 | `cmd+1..9` | `alt+1..9`（tmux 直接吃） |
 
 ### Tmux (`configs/tmux/tmux.conf`)
 - Shell path

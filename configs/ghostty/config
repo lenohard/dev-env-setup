@@ -59,6 +59,7 @@ keybind = cmd+s>e=equalize_splits
 
 # other
 copy-on-select = clipboard
+keybind = ctrl+v=paste_from_clipboard
 
 # pi image paste workaround (Alt+I sends Ctrl+V character)
 keybind = alt+i=text:\x16
@@ -102,3 +103,6 @@ keybind = cmd+s>d=jump_to_prompt:1
 keybind = shift+enter=text:\x1b\r
 keybind = alt+backspace=text:\x1b\x7f
 keybind = shift+enter=text:\n
+
+# Linux 专用覆盖（Alt 键位、alt+1..9 交给 tmux、Alt+S 发 prefix）见同目录 config.linux。
+# 非 macOS 机器由 install.sh 把 ~/.config/ghostty/config 软链到 config.linux（它先 config-file 引入本文件）。

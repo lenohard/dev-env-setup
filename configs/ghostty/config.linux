@@ -1,0 +1,85 @@
+# ============================================================
+# Linux 专用 Ghostty 配置（macOS 上不加载此文件）
+# ============================================================
+# 共享的 configs/ghostty/config 以 macOS 为主：里面用 cmd+... 键位，
+# ghostty 在 macOS 上把 cmd 当作 super。Linux 没有 cmd 键，而 mac 键盘上
+# Cmd 的物理位置 = PC 键盘上 Alt 的位置，所以这里用 Alt 复刻同一套操作手感。
+#
+# 加载顺序：先加载共享 config（macOS 键位照样可用，super+... 在 Linux 就是 Win 键），
+# 本文件的绑定排在后面，同键冲突时覆盖前面的。
+# config-file 的相对路径按「本文件所在目录」解析。
+config-file = config
+
+# ------------------------------------------------------------
+# tmux 面板最大化 / 还原（macOS: cmd+ctrl+enter）
+# ------------------------------------------------------------
+# 必须在 ghostty 侧翻译成 tmux prefix 字节（\x01 = C-a）：
+# ghostty 一旦绑定，按键就被 ghostty 吃掉，tmux 里的 bind -n C-M-Enter 永远收不到。
+# 也绝不能绑 toggle_maximize（那是整窗最大化，窗口本来就最大化，看起来像没反应）。
+keybind = ctrl+alt+enter=text:\x01z
+
+# ------------------------------------------------------------
+# tmux 分屏（macOS: cmd+ctrl+\ 右分屏 / cmd+ctrl+- 下分屏）
+# ------------------------------------------------------------
+# | 是 shift+\、_ 是 shift+-，shift 变体单独绑一份
+keybind = ctrl+alt+backslash=text:\x01|
+keybind = ctrl+alt+shift+backslash=text:\x01|
+keybind = ctrl+alt+minus=text:\x01-
+keybind = ctrl+alt+shift+minus=text:\x01-
+
+# ------------------------------------------------------------
+# Alt+1..9 不切 ghostty 标签，交给 tmux 切窗口（tmux 侧已绑 M-1..M-9）
+# macOS 上对应的是 cmd+数字（见共享 config）
+# ------------------------------------------------------------
+keybind = alt+1=unbind
+keybind = alt+2=unbind
+keybind = alt+3=unbind
+keybind = alt+4=unbind
+keybind = alt+5=unbind
+keybind = alt+6=unbind
+keybind = alt+7=unbind
+keybind = alt+8=unbind
+keybind = alt+9=unbind
+keybind = alt+digit_1=unbind
+keybind = alt+digit_2=unbind
+keybind = alt+digit_3=unbind
+keybind = alt+digit_4=unbind
+keybind = alt+digit_5=unbind
+keybind = alt+digit_6=unbind
+keybind = alt+digit_7=unbind
+keybind = alt+digit_8=unbind
+keybind = alt+digit_9=unbind
+
+# ------------------------------------------------------------
+# Alt+S = mac 上 cmd+s 的「序列前缀」(2026-11-16)
+# ------------------------------------------------------------
+# 共享 config 里那套 cmd+s>… 是 ghostty 的两段序列：先按 cmd+s，再按第二个键。
+# Linux 上用 Alt+S 复刻，动作与 mac 完全一致（不走 tmux，是 ghostty 自己的动作）。
+# 注意：Alt+S 单独按下不会有任何可见效果，它是「等第二个键」的状态。
+keybind = alt+s>r=reload_config
+keybind = alt+s>x=close_surface
+keybind = alt+s>n=new_window
+keybind = alt+s>c=new_tab
+keybind = alt+s>shift+l=next_tab
+keybind = alt+s>shift+h=previous_tab
+keybind = alt+s>comma=move_tab:-1
+keybind = alt+s>period=move_tab:1
+keybind = alt+s>1=goto_tab:1
+keybind = alt+s>2=goto_tab:2
+keybind = alt+s>3=goto_tab:3
+keybind = alt+s>4=goto_tab:4
+keybind = alt+s>5=goto_tab:5
+keybind = alt+s>6=goto_tab:6
+keybind = alt+s>7=goto_tab:7
+keybind = alt+s>8=goto_tab:8
+keybind = alt+s>9=goto_tab:9
+keybind = alt+s>\=new_split:right
+keybind = alt+s>-=new_split:down
+keybind = alt+s>h=goto_split:left
+keybind = alt+s>j=goto_split:bottom
+keybind = alt+s>k=goto_split:top
+keybind = alt+s>l=goto_split:right
+keybind = alt+s>z=toggle_split_zoom
+keybind = alt+s>e=equalize_splits
+keybind = alt+s>u=jump_to_prompt:-1
+keybind = alt+s>d=jump_to_prompt:1
