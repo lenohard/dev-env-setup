@@ -3,41 +3,61 @@ return {
     {
         "robitx/gp.nvim",
         config = function()
+            -- Magpie gateway (local, OpenAI-compatible) is the ONLY provider.
+            -- prod endpoint: http://127.0.0.1:3425/v1 ; model ids from /v1/models
             local conf = {
+                providers = {
+                    openai = {
+                        disable = false,
+                        endpoint = "http://127.0.0.1:3425/v1/chat/completions",
+                        secret = "magpie",
+                    },
+                    -- every other built-in provider removed (empty table = disable)
+                    azure = {},
+                    copilot = {},
+                    ollama = {},
+                    lmstudio = {},
+                    googleai = {},
+                    pplx = {},
+                    anthropic = {},
+                },
                 agents = {
                     {
-                        name = "gpt",
-                        provider = "litellm",
+                        name = "magpie-flash",
+                        provider = "openai",
                         chat = true,
                         command = true,
-                        model = { model = "mify-gateway/gpt-5.2" },
-                        system_prompt = "",
+                        model = { model = "group/flash" },
+                        system_prompt = require("gp.defaults").chat_system_prompt,
                     },
-                    {
-                        name = "mimo",
-                        provider = "litellm",
-                        chat = true,
-                        command = true,
-                        model = { model = "xiaomi/mimo-v2-flash" },
-                        system_prompt = "",
-                    },
-                    {
-                        name = "gemini-3-flash",
-                        provider = "litellm",
-                        chat = true,
-                        command = true,
-                        model = { model = "mify-gateway/gemini-3-flash" },
-                        system_prompt = "",
-                    }
+                    -- built-in agents (they would otherwise survive on the kept
+                    -- `openai` provider and request models magpie does not have)
+                    { name = "ChatGPT4o", disable = true },
+                    { name = "ChatGPT4o-mini", disable = true },
+                    { name = "ChatGPT-o3-mini", disable = true },
+                    { name = "ChatCopilot", disable = true },
+                    { name = "ChatGemini", disable = true },
+                    { name = "ChatPerplexityLlama3.1-8B", disable = true },
+                    { name = "ChatClaude-3-7-Sonnet", disable = true },
+                    { name = "ChatClaude-Sonnet-4-Thinking", disable = true },
+                    { name = "ChatClaude-3-5-Haiku", disable = true },
+                    { name = "ChatOllamaLlama3.1-8B", disable = true },
+                    { name = "ChatQwen3-8B", disable = true },
+                    { name = "ChatLMStudio", disable = true },
+                    { name = "CodeGPT4o", disable = true },
+                    { name = "CodeGPT-o3-mini", disable = true },
+                    { name = "CodeGPT4o-mini", disable = true },
+                    { name = "CodeCopilot", disable = true },
+                    { name = "CodeGemini", disable = true },
+                    { name = "CodePerplexityLlama3.1-8B", disable = true },
+                    { name = "CodeClaude-3-7-Sonnet", disable = true },
+                    { name = "CodeClaude-3-5-Haiku", disable = true },
+                    { name = "CodeOllamaLlama3.1-8B", disable = true },
                 },
-                providers = { 
-                    openai = {},
-                    litellm = { 
-                        disable = false, 
-                        endpoint = "http://127.0.0.1:4000/chat/completions", 
-                        secret = os.getenv("LITELLM_PROXY_API_KEY"), 
-                    }
-                }
+                default_chat_agent = "magpie-flash",
+                default_command_agent = "magpie-flash",
+                -- never route the local gateway through the system proxy
+                curl_params = { "--noproxy", "*" },
             }
             require("gp").setup(conf)
 
@@ -228,10 +248,9 @@ return {
                     keys = {},
                 },
                 {
-                    -- Hop
-                    "phaazon/hop.nvim",
+                    -- Hop (phaazon/hop.nvim deleted; smoka7 is the maintained fork)
+                    "smoka7/hop.nvim",
                     event = "BufRead",
-                    branch = "v2",
                     config = function()
                         require("hop").setup()
                     end,
