@@ -60,7 +60,9 @@ bind_toggle_application_hotkey({ "option", "ctrl" }, "r", "company.thebrowser.Br
 -- activity monitor
 -- bind_toggle_application_hotkey({ "option", "ctrl" }, "n", "com.apple.ActivityMonitor")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "t", "telegram")
-bind_toggle_application_hotkey({ "option", "ctrl" }, "m", "com.swinsian.Swinsian")
+-- Swinsian 未安装，m 键改给 magpie（菜单栏 App）
+-- bind_toggle_application_hotkey({ "option", "ctrl" }, "m", "com.swinsian.Swinsian")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "m", "com.yetone.magpie")
 bind_toggle_application_hotkey({"option", "ctrl"},"b", "dev.bb.desktop")
 -- preview
 bind_toggle_application_hotkey({ "option", "ctrl" }, "p", "com.apple.Preview")
