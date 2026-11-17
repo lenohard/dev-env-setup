@@ -305,12 +305,12 @@
 (gptel-make-tool
  :name "body_remember"
  :category "body"
- :description "把一条结论/偏好写进长期记忆（body-prompts/knowledge/notes.md）。只记可复用的结论（带路径、命令、事实），不记临时状态。下次对话生效。"
+ :description "把一条结论/偏好写进长期记忆（memory/main.md）。只记可复用的结论（带路径、命令、事实），不记临时状态。下次对话生效。"
  :args '((:name "note" :type string :description "要记住的内容，一两句话"))
  :function
  (lambda (note)
    (condition-case err
-       (progn (body-prompt-record note) "已记入 knowledge/notes.md")
+       (progn (body-prompt-record note) "已记入 memory/main.md")
      (error (format "记录失败: %s" (error-message-string err))))))
 
 (provide 'body-harness)

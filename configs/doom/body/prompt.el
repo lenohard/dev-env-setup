@@ -1,4 +1,4 @@
-;;; body/prompt.el --- 系统提示拼装：body-prompts 目录与动态注入  -*- lexical-binding: t; -*-
+;;; body/prompt.el --- 系统提示拼装：memory 目录与动态注入  -*- lexical-binding: t; -*-
 ;; body 的一个模块，由 body.el 统一 load，别单独加载。
 
 (require 'gptel)
@@ -35,8 +35,8 @@
 
 感知与记忆：
 - body_sense：看 buffer / 列 buffer / 只读求值查状态（输出有上限，长内容用 body_read_file）。
-- body_read_prompt：按需读 body-prompts/ 下的提示词/知识文件（系统提示里只拼 main.md 全文 + 其它文件的索引）。
-- body_remember：把可复用的结论写进长期记忆（knowledge/notes.md）。
+- body_read_prompt：按需读 memory/ 下的记忆文件（系统提示里只拼 main.md 全文 + 其它文件的索引）。
+- body_remember：把可复用的结论追加进长期记忆（memory/main.md）。
 - body_self / body_switch_model：查模型/网关、切换模型。
 - body_keep：用户明确说「记住/以后也这样」时，把 elisp 改动永久写进基因。
 - body_rewrite_self / body_edit_self：改自己的源码（模块化后可按模块改，见索引），带语法校验、备份、回滚。绝不要用 body_write_file 直接写 body/ 模块——那绕过校验和回滚。
@@ -75,17 +75,18 @@
 
 
 ;;;; ------------------------------------------------------------------
-;;;; 预制提示词 / 长期知识（body-prompts）
+;;;; 长期记忆（memory）
 ;;;; ------------------------------------------------------------------
 ;;
-;; 目录：body-prompt-dir（默认 ~/.doom.d/body-prompts/）
+;; 目录：body-prompt-dir（默认 ~/.doom.d/memory/）
 ;; 规则（保持入口轻）：
 ;;   · main.md 是唯一全文拼进系统提示的文件——只放最重要的内容；
 ;;   · 其它文件不拼接，只在系统提示里给一行索引（相对路径 + 首个标题 + 大小）；
-;;   · agent 需要时用 body_read_prompt 工具按需读取。
+;;   · agent 需要时用 body_read_prompt 工具按需读取；
+;;   · body_remember 默认追加到 main.md，内容多了再拆文件。
 
-(defvar body-prompt-dir (expand-file-name "body-prompts/" doom-user-dir)
-  "预制提示词目录。入口文件见 `body-prompt-entry'，内容会拼进系统提示。")
+(defvar body-prompt-dir (expand-file-name "memory/" doom-user-dir)
+  "长期记忆目录。入口文件见 `body-prompt-entry'，内容会拼进系统提示。")
 
 (defvar body-prompt-entry "main.md"
   "入口文件名（相对 `body-prompt-dir'），唯一全文拼接的文件。")
@@ -165,7 +166,7 @@
      ((and (null preload) (null index)) base)
      ((null preload)
       (concat base
-              "\n\n## 用户提示词目录 " body-prompt-dir "\n"
+              "\n\n## 用户记忆目录 " body-prompt-dir "\n"
               "（还没有 main.md，可让用户创建；下面是现有文件索引）\n"
               (string-join index "\n")))
      (t
@@ -186,16 +187,16 @@
 (gptel-make-tool
  :name "body_read_prompt"
  :category "body"
- :description "读 body-prompts 目录下的一个提示词/知识文件（如 persona.md、knowledge/notes.md）。系统提示里只拼了 main.md 和其它文件的索引；需要某个文件的具体内容时用这个工具。"
+ :description "读 memory 目录下的一个记忆/提示词文件（如 main.md、xx.md）。系统提示里只拼了 main.md 和其它文件的索引；需要某个文件的具体内容时用这个工具。"
  :args '((:name "file" :type string
-          :description "相对 body-prompts 的路径，如 knowledge/notes.md"))
+          :description "相对 memory 的路径，如 main.md"))
  :function
  (lambda (file)
    (let* ((rel (string-trim file))
           (f (body--prompt-path rel)))
      (cond
       ((not (file-in-directory-p f body-prompt-dir))
-       (format "拒绝：%s 不在 body-prompts 目录里。" rel))
+       (format "拒绝：%s 不在 memory 目录里。" rel))
       ((not (file-regular-p f))
        (format "没有这个文件: %s。现有文件：\n%s"
                rel (string-join (or (body--prompt-index) '("（空）")) "\n")))
@@ -209,38 +210,29 @@
 ;;;; 目录骨架与命令
 
 (defun body-prompts-ensure ()
-  "确保预制提示词目录骨架存在（入口文件、persona.md、knowledge/）。"
+  "确保记忆目录和入口文件 main.md 存在（不再造 persona.md / knowledge/）。"
   (interactive)
-  (make-directory (body--prompt-path "knowledge") t)
+  (make-directory body-prompt-dir t)
   (let ((entry (body--prompt-path body-prompt-entry)))
     (unless (file-exists-p entry)
       (with-temp-file entry
-        (insert "# 用户偏好与长期知识\n\n"
+        (insert "# 长期记忆\n\n"
                 "<!-- main.md 是唯一全文拼进系统提示的文件，只放最重要的内容；\n"
-                "     其它文件（persona.md、knowledge/*）只出现在索引里，\n"
-                "     agent 用 body_read_prompt 按需读取。 -->\n\n"
+                "     其它文件只出现在索引里，agent 用 body_read_prompt 按需读取。 -->\n\n"
                 "## 沟通偏好\n- 用中文，简短直接，不输出思考过程。\n"))))
-  (let ((persona (body--prompt-path "persona.md")))
-    (unless (file-exists-p persona)
-      (with-temp-file persona
-        (insert "# 沟通偏好（详细版）\n", "- 用中文，简短直接，不输出思考过程。\n"))))
-  (let ((notes (body--prompt-path "knowledge/notes.md")))
-    (unless (file-exists-p notes)
-      (with-temp-file notes
-        (insert "# notes\n\n一条结论一行，附上路径或证据。\n"))))
   body-prompt-dir)
 
 (defun body-prompts-open ()
-  "打开预制提示词入口文件（首次调用会生成骨架）。"
+  "打开记忆入口文件 main.md（首次调用会生成骨架）。"
   (interactive)
   (body-prompts-ensure)
   (find-file (body--prompt-path body-prompt-entry)))
 
 (defun body-prompt-record (note &optional file)
-  "把 NOTE 追加进知识文件（默认 knowledge/notes.md），下一条消息即生效。"
+  "把 NOTE 追加进记忆入口文件（默认 main.md），下一条消息即生效。"
   (interactive "s记录到提示词: ")
   (body-prompts-ensure)
-  (let ((f (body--prompt-path (or file "knowledge/notes.md"))))
+  (let ((f (body--prompt-path (or file body-prompt-entry))))
     (make-directory (file-name-directory f) t)
     (with-temp-buffer
       (when (file-exists-p f) (insert-file-contents f))
