@@ -574,8 +574,6 @@ function claude-init() {
     echo "Claude project memory setup complete in: $(realpath "$target_dir")"
 }
 
-export PATH="$HOME/.nvm/versions/node/v20.14.0/bin:$PATH"
-export PATH="$HOME/.nvm/versions/node/v22.10.0/bin:$PATH"
 
 # Amazon Q post block. Keep at the bottom of this file.
 [[ -f "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh" ]] && builtin source "${HOME}/Library/Application Support/amazon-q/shell/zshrc.post.zsh"
@@ -618,6 +616,19 @@ if [[ -d "${NVM_DIR:-$HOME/.nvm}/versions/node/${_nvm_pin}" ]] && _nvm_find_sh >
   nvm use "${_nvm_pin}" >/dev/null 2>&1 || true
 fi
 unset _nvm_pin
+
+# 保证真实 node 对非 zsh 子进程可见：上面的 `node` 是懒加载函数，bash 脚本
+# （如 rb 的 agent-build）看不到 shell 函数，只认 PATH 里的可执行文件。
+# 若 NVM_DEFAULT 指向的版本没装、pin 失败，这里补一个真实路径。
+if ! whence -p node >/dev/null 2>&1; then
+  for _node_dir in "$HOME/.local/share/pi-node/current/bin" "$HOME"/.nvm/versions/node/*/bin(N); do
+    if [[ -x "$_node_dir/node" ]]; then
+      path=("$_node_dir" $path)
+      break
+    fi
+  done
+  unset _node_dir
+fi
 
 # iOS simulator helpers (macOS only)
 if [[ $OSTYPE == darwin* ]]; then
@@ -749,3 +760,8 @@ alias bbweb="_open_url http://127.0.0.1:38886"
 alias piweb="_open_url http://127.0.0.1:8964"
 
 echo "ZSH loaded in ${ELAPSED} ms"
+
+# >>> herdr installer >>>
+fpath=("$HOME/.local/share/herdr/completions" $fpath)
+autoload -Uz compinit && compinit -C
+# <<< herdr installer <<<
