@@ -765,3 +765,10 @@ echo "ZSH loaded in ${ELAPSED} ms"
 fpath=("$HOME/.local/share/herdr/completions" $fpath)
 autoload -Uz compinit && compinit -C
 # <<< herdr installer <<<
+
+# >>> magpie agy >>>
+unalias agy 2>/dev/null || true
+agy() {
+  if [ -x '/Applications/magpie.app/Contents/MacOS/magpie' ]; then '/Applications/magpie.app/Contents/MacOS/magpie' agy run "$@"; else command agy "$@"; fi
+}
+# <<< magpie agy <<<

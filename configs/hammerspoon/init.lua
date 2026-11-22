@@ -53,7 +53,7 @@ local function bind_toggle_application_hotkey(modifier, key, app_name)
 end
 
 -- bind_toggle_application_hotkey({"option", "ctrl"},"o", "Firefox")
-bind_toggle_application_hotkey({ "option", "ctrl" }, "r", "company.thebrowser.Browser")
+bind_toggle_application_hotkey({ "option", "ctrl" }, "r", "company.thebrowser.dia")
 -- firefox Browser
 -- bind_toggle_application_hotkey({"option", "ctrl"},"x", "firefox")
 -- bind_toggle_application_hotkey({"option", "ctrl"},"g", "com.apple.Safari.WebApp.CFD1BDC5-D061-4FCD-9D2D-82D7A861C19F")
