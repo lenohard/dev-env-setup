@@ -92,7 +92,7 @@ bind_toggle_application_hotkey({ "ctrl" }, "'", "com.mitchellh.ghostty")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "a", "com.nssurge.surge-mac")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "g", "com.openai.codex")
 -- bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.kangfenmao.CherryStudio")
-bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.wefonk.deepchat")
+-- bind_toggle_application_hotkey({ "option", "ctrl" }, "h", "com.wefonk.deepchat")
 bind_toggle_application_hotkey({ "option", "ctrl" }, "k", "com.bilingify.readest")
 -- bind spacemacs
 bind_toggle_application_hotkey({ "option", "ctrl" }, "s", "org.gnu.Emacs")
